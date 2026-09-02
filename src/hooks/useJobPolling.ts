@@ -6,6 +6,8 @@ import type { SearchMatch } from '../types';
 const POLL_INTERVAL_MS = 2000;
 const RETRY_DELAY_MS = 250;
 const MAX_CONSECUTIVE_FAILURES = 2;
+const POLL_TIMEOUT_MS =
+  Number(import.meta.env.VITE_POLL_TIMEOUT_MS) || 600_000; // 10 min default
 
 interface PollCallbacks {
   onProgress: (progress: number | null) => void;
@@ -49,8 +51,13 @@ export function useJobPolling({
     let cancelled = false;
     let timerId: number | undefined;
     let failures = 0;
+    const startedAt = Date.now();
 
     const tick = async (): Promise<void> => {
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        onError(t('error.pollTimeout'));
+        return;
+      }
       try {
         const keepPolling = await handle();
         failures = 0;

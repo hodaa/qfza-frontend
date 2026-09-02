@@ -86,7 +86,8 @@
     "jobGone": "This transcription job no longer exists. Please search again.",
     "boundary": "Something unexpected went wrong. Please reload the page and try again.",
     "failed": "Transcription failed: {{message}}",
-    "network": "Could not reach the server. Check that the backend is running."
+    "network": "Could not reach the server. Check that the backend is running.",
+    "pollTimeout": "Transcription is taking longer than expected. Please try again."
   },
   "mismatch": {
     "message": "This video doesn't appear to be in {{language}}. Please pick a different search language."
