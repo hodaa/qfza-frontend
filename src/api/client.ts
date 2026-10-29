@@ -1,8 +1,12 @@
 import type {
+  PreparedVideo,
+  ResolvedVideo,
   SearchResponse,
   StatusResponse,
   VideoDownloadCreated,
   VideoDownloadStatus,
+  VideoNotesCreated,
+  VideoNotesStatus,
   VideoFormatsResponse,
   VideoSearchResponse,
 } from '../types';
@@ -119,6 +123,22 @@ export function submitSearch(
   });
 }
 
+/** Resolve a pasted link to a stored video without starting transcription. */
+export function resolveVideo(videoUrl: string, signal?: AbortSignal): Promise<ResolvedVideo> {
+  return request<ResolvedVideo>('/api/videos/resolve', {
+    json: { video_url: videoUrl },
+    signal,
+  });
+}
+
+/** Ensure a video's transcript is ready, queueing it when necessary. */
+export function prepareVideo(youtubeId: string, signal?: AbortSignal): Promise<PreparedVideo> {
+  return request<PreparedVideo>(`/api/videos/${encodeURIComponent(youtubeId)}/prepare`, {
+    method: 'POST',
+    signal,
+  });
+}
+
 /** Fetch the current status of a transcription job. */
 export function fetchJobStatus(jobId: string, signal?: AbortSignal): Promise<StatusResponse> {
   return request<StatusResponse>(`/api/status/${jobId}`, { signal });
@@ -219,6 +239,31 @@ export function consumeVideoDownload(
   return request<VideoDownloadStatus>(
     `/api/videos/${encodeURIComponent(youtubeId)}/downloads/${encodeURIComponent(downloadId)}/consume`,
     { method: 'POST', signal },
+  );
+}
+
+/** Queue AI lecture notes; the worker produces the PDF and reports a blob URL. */
+export function createVideoNotes(
+  youtubeId: string,
+  signal?: AbortSignal,
+  regenerate = false,
+): Promise<VideoNotesCreated> {
+  const query = regenerate ? '?regenerate=true' : '';
+  return request<VideoNotesCreated>(`/api/videos/${encodeURIComponent(youtubeId)}/notes${query}`, {
+    method: 'POST',
+    signal,
+  });
+}
+
+/** Fetch a lecture-notes request's state, its blob URL once ready, and filename. */
+export function fetchVideoNotesStatus(
+  youtubeId: string,
+  noteId: string,
+  signal?: AbortSignal,
+): Promise<VideoNotesStatus> {
+  return request<VideoNotesStatus>(
+    `/api/videos/${encodeURIComponent(youtubeId)}/notes/${encodeURIComponent(noteId)}`,
+    { signal },
   );
 }
 

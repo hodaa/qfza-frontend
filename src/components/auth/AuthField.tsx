@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import type { ReactNode, Ref } from 'react';
 import { useTranslation } from 'react-i18next';
-import { IconAlert } from '../icons';
+import { IconAlert, IconEye, IconEyeOff } from '../icons';
 
 /**
  * Shared field plumbing for the auth forms.
@@ -39,8 +40,11 @@ export function AuthField({
   inputRef,
   hint,
 }: FieldProps) {
+  const { t } = useTranslation();
   const errorId = `${id}-error`;
   const hintId = `${id}-hint`;
+  const isPassword = type === 'password';
+  const [revealed, setRevealed] = useState(false);
 
   return (
     <div>
@@ -56,7 +60,7 @@ export function AuthField({
         <input
           id={id}
           ref={inputRef}
-          type={type}
+          type={isPassword && revealed ? 'text' : type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           autoComplete={autoComplete}
@@ -66,12 +70,23 @@ export function AuthField({
           aria-describedby={error ? errorId : hint ? hintId : undefined}
           className={`w-full rounded-lg border px-3.5 py-2.5 text-base text-slate-900 placeholder:text-slate-500 transition-colors duration-200 focus:bg-white focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${
             icon ? 'ps-11' : ''
-          } ${
+          } ${isPassword ? 'pe-11' : ''} ${
             error
               ? 'border-danger bg-danger-soft focus:border-danger focus:ring-danger'
               : 'border-slate-200 bg-slate-50 focus:border-action focus:ring-action'
           }`}
         />
+        {isPassword ? (
+          <button
+            type="button"
+            onClick={() => setRevealed((value) => !value)}
+            aria-label={t(revealed ? 'auth.fields.hidePassword' : 'auth.fields.showPassword')}
+            aria-pressed={revealed}
+            className="absolute inset-y-0 end-0 flex w-11 items-center justify-center rounded-lg text-muted transition-colors duration-200 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-action"
+          >
+            {revealed ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+          </button>
+        ) : null}
       </div>
       {hint && !error ? (
         <p id={hintId} className="mt-1.5 text-xs text-muted">

@@ -19,6 +19,8 @@ export function LoginPage() {
     useCredentialsFields();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   // Set on any input after a failure: repeating the same wrong password should
   // not keep the stale message sitting under a field being corrected.
   const [dirty, setDirty] = useState(false);
@@ -30,10 +32,24 @@ export function LoginPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending) return;
+    const cleanEmail = email.trim();
+    const nextEmailError = cleanEmail ? null : t('auth.fields.emailRequired');
+    const nextPasswordError = password ? null : t('auth.fields.passwordRequired');
+    setEmailError(nextEmailError);
+    setPasswordError(nextPasswordError);
+    if (nextEmailError || nextPasswordError) {
+      if (nextEmailError) {
+        emailRef.current?.focus();
+      } else {
+        passwordRef.current?.focus();
+      }
+      return;
+    }
     setError(null);
+    setPasswordRefused(false);
     setPending(true);
     try {
-      await signIn(email.trim(), password);
+      await signIn(cleanEmail, password);
       navigate('home');
     } catch (caught) {
       setError(describeError(caught));
@@ -59,6 +75,13 @@ export function LoginPage() {
   const onEmail = (value: string) => {
     setEmail(value);
     if (dirty) setError(null);
+    if (emailError) setEmailError(null);
+  };
+
+  const onPassword = (value: string) => {
+    setPassword(value);
+    if (dirty) setError(null);
+    if (passwordError) setPasswordError(null);
   };
 
   return (
@@ -88,6 +111,7 @@ export function LoginPage() {
             onChange={onEmail}
             icon={<IconMail size={18} />}
             inputRef={emailRef}
+            error={emailError}
           />
           <AuthField
             id={passwordId}
@@ -95,12 +119,10 @@ export function LoginPage() {
             type="password"
             autoComplete="current-password"
             value={password}
-            onChange={(value) => {
-              setPassword(value);
-              if (dirty) setError(null);
-            }}
+            onChange={onPassword}
             icon={<IconLock size={18} />}
             inputRef={passwordRef}
+            error={passwordError}
           />
           <div className="text-end">
             <RouteLink

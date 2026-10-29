@@ -72,7 +72,7 @@ describe('prerendered document language', () => {
 
   it('ships a bilingual EN-first title for crawlers', () => {
     const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? '';
-    expect(title).toBe('Qfza — Search Inside YouTube Videos & Jump to the Moment | قفزة');
+    expect(title).toBe('Qfza — Search Inside Videos & Jump to the Moment | قفزة');
   });
 
   it('ships the description the runtime falls back to', () => {

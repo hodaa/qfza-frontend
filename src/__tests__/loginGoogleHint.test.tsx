@@ -10,7 +10,6 @@ vi.mock('../config', () => ({
   CSRF_TOKEN: '',
   CSRF_HEADER_NAME: 'X-CSRF-Token',
   CONTACT_EMAIL: 'support@qfza.app',
-  CONTACT_EMAIL_CONFIGURED: true,
   CONTACT_FORM_ENDPOINT: '',
   get GOOGLE_CLIENT_ID() {
     return googleClientId;
@@ -62,7 +61,7 @@ async function renderLogin(fetchMock: ReturnType<typeof vi.fn>) {
 async function submitPasswordLogin(fetchMock: ReturnType<typeof vi.fn>) {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText(/email/i), 'someone@example.com');
-  await user.type(screen.getByLabelText(/password/i), 'somepassword');
+  await user.type(screen.getByLabelText('Password'), 'somepassword');
   await user.click(screen.getByRole('button', { name: /^sign in$/i }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 }

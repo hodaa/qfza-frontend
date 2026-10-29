@@ -33,7 +33,7 @@ const noop = async () => {};
  * actions is the safe reading: a visitor who is actually signed in still gets
  * the real state, because main.tsx always mounts the provider.
  */
-export const ANONYMOUS: AuthState = {
+const ANONYMOUS: AuthState = {
   user: null,
   loading: false,
   signIn: noop,

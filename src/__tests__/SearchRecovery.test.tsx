@@ -1,21 +1,42 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
-import { ApiError, fetchJobStatus, fetchVideoSearch, submitSearch } from '../api/client';
+import {
+  ApiError,
+  fetchJobStatus,
+  fetchVideoSearch,
+  resolveVideo,
+  submitSearch,
+} from '../api/client';
 import { clearResultsCache } from '../utils/resultsCache';
-import type { SearchMatch, SearchResponse, StatusResponse, VideoSearchResponse } from '../types';
+import type {
+  ResolvedVideo,
+  SearchMatch,
+  SearchResponse,
+  StatusResponse,
+  VideoSearchResponse,
+} from '../types';
 
 vi.mock('../api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/client')>()),
   submitSearch: vi.fn(),
   fetchJobStatus: vi.fn(),
   fetchVideoSearch: vi.fn(),
+  resolveVideo: vi.fn(),
 }));
 
 const submit = vi.mocked(submitSearch);
 const status = vi.mocked(fetchJobStatus);
 const videoSearch = vi.mocked(fetchVideoSearch);
+const resolve = vi.mocked(resolveVideo);
 const URL = 'https://youtu.be/abcdef12345';
+const RESOLVED: ResolvedVideo = {
+  id: 'video-row-1',
+  video_id: 'abcdef12345',
+  title: 'Test video',
+  duration_seconds: 300,
+  transcribed: false,
+};
 const MATCHES: SearchMatch[] = [
   { timestamp: '00:07', progress_seconds: 7, text_snippet: 'old result' },
 ];
@@ -38,11 +59,14 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function start() {
+async function start(keyword = 'first phrase') {
   const view = render(<App />);
   fireEvent.change(screen.getByLabelText('Video URL'), { target: { value: URL } });
-  fireEvent.change(screen.getByLabelText('Word or phrase'), { target: { value: 'first phrase' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Jump to the moment' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Jump to video' }));
+  fireEvent.change(await screen.findByLabelText('Search this video'), {
+    target: { value: keyword },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }));
   return view;
 }
 
@@ -63,6 +87,8 @@ beforeEach(() => {
   submit.mockReset();
   status.mockReset();
   videoSearch.mockReset();
+  resolve.mockReset();
+  resolve.mockResolvedValue(RESOLVED);
   clearResultsCache();
 });
 
@@ -74,7 +100,7 @@ describe('search cancellation', () => {
   ])('ignores a late $status submission after cancel', async (response) => {
     const pending = deferred<SearchResponse>();
     submit.mockReturnValue(pending.promise);
-    start();
+    await start();
     const signal = submit.mock.calls[0][2];
     await cancel();
     expect(signal?.aborted).toBe(true);
@@ -86,7 +112,7 @@ describe('search cancellation', () => {
   it('ignores a late submission error after cancel', async () => {
     const pending = deferred<SearchResponse>();
     submit.mockReturnValue(pending.promise);
-    start();
+    await start();
     await cancel();
     await act(async () => pending.reject(new ApiError('error.network')));
     expectIdle();
@@ -98,10 +124,12 @@ describe('search cancellation', () => {
       status: 'found',
       results: [{ timestamp: '00:12', progress_seconds: 12, text_snippet: 'new result' }],
     });
-    start();
+    await start();
     await cancel();
-    fireEvent.change(screen.getByLabelText('Word or phrase'), { target: { value: 'new phrase' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Jump to the moment' }));
+    fireEvent.change(screen.getByLabelText('Search this video'), {
+      target: { value: 'new phrase' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
     expect(await screen.findByText('new result')).toBeInTheDocument();
     await act(async () => old.resolve({ status: 'found', results: MATCHES }));
     expect(screen.getByText('new result')).toBeInTheDocument();
@@ -114,7 +142,7 @@ describe('search cancellation', () => {
       const pending = deferred<StatusResponse>();
       submit.mockResolvedValue({ status: 'processing', job_id: 'job-1', video_id: 'video-1' });
       status.mockReturnValue(pending.promise);
-      start();
+      await start();
       await waitFor(() => expect(status).toHaveBeenCalledOnce());
       const signal = status.mock.calls[0][1];
       await cancel();
@@ -133,7 +161,7 @@ describe('search cancellation', () => {
     submit.mockResolvedValue({ status: 'processing', job_id: 'job-1', video_id: 'video-1' });
     status.mockResolvedValue(COMPLETED);
     videoSearch.mockReturnValue(pending.promise);
-    start();
+    await start();
     await waitFor(() => expect(videoSearch).toHaveBeenCalledOnce());
     const signal = videoSearch.mock.calls[0][2];
     await cancel();
@@ -146,7 +174,7 @@ describe('search cancellation', () => {
     submit.mockResolvedValue({ status: 'processing', job_id: 'job-1', video_id: 'video-1' });
     status.mockResolvedValue(COMPLETED);
     videoSearch.mockResolvedValue({ status: 'found', results: MATCHES });
-    start();
+    await start();
     // Let the lazily-loaded results panel resolve before swapping in fake
     // timers (findBy/waitFor poll on real timers and would stall otherwise).
     await screen.findByRole('button', { name: 'Cancel search' });
@@ -161,7 +189,7 @@ describe('search cancellation', () => {
   it('aborts the active submission on unmount', async () => {
     const pending = deferred<SearchResponse>();
     submit.mockReturnValue(pending.promise);
-    const { unmount } = start();
+    const { unmount } = await start();
     const signal = submit.mock.calls[0][2];
     unmount();
     expect(signal?.aborted).toBe(true);
@@ -175,9 +203,9 @@ describe('search cancellation', () => {
 describe('returning to the form', () => {
   it('clears only the phrase after no matches and restores keyboard focus', async () => {
     submit.mockResolvedValue({ status: 'not_found', results: [] });
-    start();
+    await start();
     fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
-    const phrase = screen.getByLabelText('Word or phrase');
+    const phrase = screen.getByLabelText('Search this video');
     expect(phrase).toHaveValue('');
     expect(screen.getByLabelText('Video URL')).toHaveValue(URL);
     await waitFor(() => expect(phrase).toHaveFocus());
@@ -186,42 +214,32 @@ describe('returning to the form', () => {
 });
 
 describe('current-query retry and persistent help', () => {
-  it('retries the currently visible URL and phrase instead of the failed query', async () => {
+  it('retries the currently visible phrase instead of the failed query', async () => {
     submit
       .mockRejectedValueOnce(new ApiError('error.network'))
       .mockResolvedValueOnce({ status: 'found', results: MATCHES });
-    start();
+    await start();
     await screen.findByRole('button', { name: 'Try again' });
-    const changedUrl = 'https://youtu.be/zyxwvut9876';
-    fireEvent.change(screen.getByLabelText('Video URL'), { target: { value: changedUrl } });
-    fireEvent.change(screen.getByLabelText('Word or phrase'), {
+    fireEvent.change(screen.getByLabelText('Search this video'), {
       target: { value: 'corrected phrase' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await screen.findByText('old result');
-    expect(submit).toHaveBeenLastCalledWith(
-      changedUrl,
-      'corrected phrase',
-      expect.any(AbortSignal),
-    );
+    expect(submit).toHaveBeenLastCalledWith(URL, 'corrected phrase', expect.any(AbortSignal));
     expect(
       screen.getByRole('heading', { name: 'Matches for “corrected phrase”' }),
     ).toBeInTheDocument();
   });
 
-  it('validates edited fields on retry and focuses the first invalid one without submitting', async () => {
+  it('validates an edited phrase on retry without submitting the old one', async () => {
     submit.mockRejectedValue(new ApiError('error.network'));
-    start();
+    await start();
     await screen.findByRole('button', { name: 'Try again' });
-    fireEvent.change(screen.getByLabelText('Video URL'), {
-      target: { value: 'https://vimeo.com/123' },
-    });
-    fireEvent.change(screen.getByLabelText('Word or phrase'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Search this video'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(submit).toHaveBeenCalledOnce();
-    expect(screen.getByLabelText('Video URL')).toHaveFocus();
-    expect(screen.getByLabelText('Video URL')).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByLabelText('Word or phrase')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Search this video')).toHaveFocus();
+    expect(screen.getByLabelText('Search this video')).toHaveAttribute('aria-invalid', 'true');
   });
 
   it.each(['found', 'failure'] as const)(
@@ -229,7 +247,7 @@ describe('current-query retry and persistent help', () => {
     async (outcome) => {
       const pending = deferred<SearchResponse>();
       submit.mockReturnValue(pending.promise);
-      start();
+      await start();
       for (const id of ['how-it-works', 'why-qfza']) {
         expect(document.getElementById(id)).toBeInTheDocument();
       }
@@ -245,7 +263,7 @@ describe('current-query retry and persistent help', () => {
         expect(document.getElementById(id)).toBeInTheDocument();
       }
       expect(submit).toHaveBeenCalledOnce();
-      expect(screen.getByLabelText('Word or phrase')).toHaveValue('first phrase');
+      expect(screen.getByLabelText('Search this video')).toHaveValue('first phrase');
       expect(screen.getByLabelText('Video URL')).not.toHaveAttribute('readonly');
     },
   );

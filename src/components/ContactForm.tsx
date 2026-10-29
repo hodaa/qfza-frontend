@@ -1,5 +1,6 @@
 import { type FormEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getLanguage } from '../i18n';
 import { fieldStateClass } from '../utils/fieldStyles';
 import { CONTACT_FORM_ENDPOINT } from '../config';
 
@@ -31,6 +32,11 @@ const FIELD_ERROR_MAP: Record<Field, { required: string; invalid?: string }> = {
 /** Contact form that posts JSON to a form service (e.g. Formspree). */
 export function ContactForm() {
   const { t } = useTranslation();
+  const isRtl = getLanguage() === 'ar';
+  const textDirection = isRtl ? 'rtl' : 'ltr';
+  const placeholderDirection = isRtl
+    ? 'text-right placeholder:text-right'
+    : 'text-left placeholder:text-left';
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
@@ -120,7 +126,8 @@ export function ContactForm() {
               <input
                 id="contact-name"
                 ref={nameRef}
-                className={`mt-2 ${inputClass(errors.name !== null)}`}
+                dir={textDirection}
+                className={`mt-2 ${inputClass(errors.name !== null)} ${placeholderDirection}`}
                 value={name}
                 onChange={(e) => onFieldChange('name', e.target.value)}
                 placeholder={t('contact.form.namePlaceholder')}
@@ -144,7 +151,8 @@ export function ContactForm() {
                 id="contact-email"
                 ref={emailRef}
                 type="email"
-                className={`mt-2 ${inputClass(errors.email !== null)}`}
+                dir="ltr"
+                className={`mt-2 ${inputClass(errors.email !== null)} text-left placeholder:text-left`}
                 value={email}
                 onChange={(e) => onFieldChange('email', e.target.value)}
                 placeholder={t('contact.form.emailPlaceholder')}
@@ -172,7 +180,8 @@ export function ContactForm() {
               <textarea
                 id="contact-message"
                 ref={messageRef}
-                className={`mt-2 min-h-32 resize-y ${inputClass(errors.message !== null)}`}
+                dir={textDirection}
+                className={`mt-2 min-h-32 resize-y ${inputClass(errors.message !== null)} ${placeholderDirection}`}
                 value={message}
                 maxLength={MAX_MESSAGE}
                 onChange={(e) => onFieldChange('message', e.target.value)}

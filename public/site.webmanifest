@@ -1,7 +1,7 @@
 {
-  "name": "Qfza — Search Inside YouTube Videos",
+  "name": "Qfza — Search Inside Videos",
   "short_name": "Qfza",
-  "description": "Search inside YouTube videos and video transcripts for any word or phrase, then jump directly to the exact timestamp it appears.",
+  "description": "Search inside videos and video transcripts for any word or phrase, then jump directly to the exact timestamp it appears.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

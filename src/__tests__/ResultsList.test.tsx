@@ -120,7 +120,7 @@ describe('ResultsList', () => {
     expect(watch[1]).toHaveAttribute('href', 'https://www.youtube.com/watch?v=abc123&t=75');
   });
 
-  it('offers only share actions for a Drive video, which has no YouTube page or download yet', () => {
+  it('offers share and download actions for a Drive video, without a YouTube link', () => {
     const driveId = '1DOoJhC6NHpLSu2nAvaWy3HukVimEyyhE';
     render(
       <ResultsList
@@ -130,13 +130,38 @@ describe('ResultsList', () => {
         video={{ source: 'drive', id: driveId }}
       />,
     );
-    // No YouTube-branded link and no download button: the pipeline behind it
-    // still produces YouTube streams, and a button that can only fail is worse
-    // than no button.
+    // No YouTube-branded link, but both the moment download and share actions
+    // are available: the worker cuts Drive files to the requested range.
     expect(screen.queryAllByRole('link', { name: /Watch on YouTube at/ })).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: /Download from/ })).toBeNull();
-    // Sharing stays, one per row.
+    expect(screen.getAllByRole('button', { name: /Download from/ })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: /Share link to/ })).toHaveLength(2);
+  });
+
+  it('downloads a Drive match segment without asking for a quality', async () => {
+    const user = userEvent.setup();
+    const save = holdSave();
+    const driveId = '1DOoJhC6NHpLSu2nAvaWy3HukVimEyyhE';
+    render(
+      <ResultsList
+        matches={matches}
+        keyword="hello world"
+        onSeek={vi.fn()}
+        video={{ source: 'drive', id: driveId }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Download from 01:15 to the end (MP4)' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByLabelText('Quality')).not.toBeInTheDocument();
+    expect(formatsMock).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Download' }));
+
+    const url = String(saveDownloadMock.mock.calls[0]?.[0]);
+    expect(url.slice(url.indexOf('/api'))).toBe(`/api/videos/${driveId}/video.mp4?start=75`);
+
+    await act(async () => {
+      save.finish();
+    });
   });
 
   it('opens the download dialog from a match with the start pre-filled', async () => {

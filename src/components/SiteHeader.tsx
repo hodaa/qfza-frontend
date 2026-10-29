@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import type { MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AccountMenu } from './auth/AccountMenu';
 import { LanguageToggle } from './LanguageToggle';
@@ -8,11 +9,19 @@ import { getLanguage } from '../i18n';
 const NAV_LINK =
   'inline-flex min-h-11 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold whitespace-nowrap text-primary transition-colors duration-200 hover:bg-slate-100 hover:text-action-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-action sm:min-h-0';
 
-function Logo() {
+function Logo({ onActivate }: { onActivate?: () => void }) {
   const { t } = useTranslation();
+
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    onActivate?.();
+  };
+
   return (
     <RouteLink
       to="home"
+      onClick={handleClick}
       className="order-1 flex shrink-0 items-center rounded-lg transition-transform duration-200 hover:scale-[1.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-action sm:justify-self-start"
       aria-label={t('nav.home')}
     >
@@ -41,12 +50,16 @@ function Logo() {
  * void between the logo and the links. `1fr` also keeps a min-content floor, so
  * the long Arabic labels can never squeeze the logo or the switcher.
  */
-export const SiteHeader = memo(function SiteHeader() {
+export const SiteHeader = memo(function SiteHeader({
+  onLogoClick,
+}: {
+  onLogoClick?: () => void;
+}) {
   const { t } = useTranslation();
 
   return (
     <header className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-slate-200 pb-3 sm:mb-8 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-y-0 sm:pb-4">
-      <Logo />
+      <Logo onActivate={onLogoClick} />
       <nav
         className="order-3 flex w-full items-center justify-center gap-x-8 border-t border-slate-100 pt-3 sm:order-2 sm:w-auto sm:gap-x-6 sm:border-0 sm:pt-0"
         aria-label={t('nav.primary')}

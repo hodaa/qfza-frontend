@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildDrivePreviewUrl,
+  buildDriveStreamUrl,
   buildMomentHref,
   buildShareUrl,
   buildThumbnailUrl,
@@ -76,6 +78,8 @@ describe('inspectVideoUrl', () => {
     'ftp://www.youtube.com/watch?v=abcdef12345',
     'https://user:password@drive.google.com/file/d/' + DRIVE_ID,
     'not a url',
+    'https://youtu.be/invalid',
+    'https://www.youtube.com/watch?v=too-short',
   ])('rejects malformed or non-HTTP(S) links before any source claims them: %s', (url) => {
     expect(inspectVideoUrl(url)).toEqual({ video: null, issue: 'invalid' });
   });
@@ -111,6 +115,28 @@ describe('buildWatchUrl', () => {
 
   it('builds the Drive file page, which cannot start at a second', () => {
     expect(buildWatchUrl(DRIVE, 62)).toBe(`https://drive.google.com/file/d/${DRIVE_ID}/view`);
+  });
+});
+
+describe('buildDriveStreamUrl', () => {
+  it('builds the Range-capable Drive API URL the player needs', () => {
+    expect(buildDriveStreamUrl(DRIVE_ID, '')).toBe(
+      `https://www.googleapis.com/drive/v3/files/${DRIVE_ID}?alt=media`,
+    );
+  });
+
+  it('appends the referrer-restricted API key when configured', () => {
+    expect(buildDriveStreamUrl(DRIVE_ID, 'test-key')).toBe(
+      `https://www.googleapis.com/drive/v3/files/${DRIVE_ID}?alt=media&key=test-key`,
+    );
+  });
+});
+
+describe('buildDrivePreviewUrl', () => {
+  it('builds the embeddable preview URL used as the playback fallback', () => {
+    expect(buildDrivePreviewUrl(DRIVE_ID)).toBe(
+      `https://drive.google.com/file/d/${DRIVE_ID}/preview`,
+    );
   });
 });
 

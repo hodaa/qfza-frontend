@@ -2,9 +2,16 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
-import { ApiError, fetchJobStatus, fetchVideoSearch, submitSearch } from '../api/client';
+import {
+  ApiError,
+  fetchJobStatus,
+  fetchVideoSearch,
+  resolveVideo,
+  submitSearch,
+} from '../api/client';
 import { clearResultsCache } from '../utils/resultsCache';
-import type { SearchMatch, SearchResponse } from '../types';
+import { buildDriveStreamUrl } from '../utils/videoSources';
+import type { ResolvedVideo, SearchMatch, SearchResponse } from '../types';
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
@@ -13,28 +20,42 @@ vi.mock('../api/client', async (importOriginal) => {
     submitSearch: vi.fn(),
     fetchJobStatus: vi.fn(),
     fetchVideoSearch: vi.fn(),
+    resolveVideo: vi.fn(),
   };
 });
 
 const mockSubmit = vi.mocked(submitSearch);
 const mockStatus = vi.mocked(fetchJobStatus);
 const mockVideoSearch = vi.mocked(fetchVideoSearch);
+const mockResolve = vi.mocked(resolveVideo);
 
 const URL = 'https://www.youtube.com/watch?v=abcdef12345';
 const RESULTS: SearchMatch[] = [{ timestamp: '00:05', progress_seconds: 5, text_snippet: null }];
 
-async function fillAndSubmit(): Promise<void> {
+const RESOLVED: ResolvedVideo = {
+  id: 'video-row-1',
+  video_id: 'abcdef12345',
+  title: 'Test video',
+  duration_seconds: 300,
+  transcribed: false,
+};
+
+async function fillAndSubmit(keyword = 'hello world'): Promise<void> {
   const user = userEvent.setup();
   render(<App />);
   await user.type(screen.getByLabelText('Video URL'), URL);
-  await user.type(screen.getByLabelText('Word or phrase'), 'hello world');
-  await user.click(screen.getByRole('button', { name: 'Jump to the moment' }));
+  await user.click(screen.getByRole('button', { name: 'Jump to video' }));
+  await screen.findByLabelText('Search this video');
+  await user.type(screen.getByLabelText('Search this video'), keyword);
+  await user.click(screen.getByRole('button', { name: 'Search' }));
 }
 
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearResultsCache();
+    mockResolve.mockResolvedValue(RESOLVED);
+    window.history.replaceState(null, '', '/');
   });
 
   it('shows cached results when the video is already transcribed', async () => {
@@ -50,8 +71,9 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
     await user.type(screen.getByLabelText('Video URL'), driveUrl);
-    await user.type(screen.getByLabelText('Word or phrase'), 'hello world');
-    await user.click(screen.getByRole('button', { name: 'Jump to the moment' }));
+    await user.click(screen.getByRole('button', { name: 'Jump to video' }));
+    await user.type(await screen.findByLabelText('Search this video'), 'hello world');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
     expect(await screen.findByText('00:05')).toBeInTheDocument();
     // The raw pasted link is what the backend identifies; the app does not rewrite it.
     expect(mockSubmit).toHaveBeenCalledWith(driveUrl, 'hello world', expect.any(AbortSignal));
@@ -174,32 +196,19 @@ describe('App', () => {
     await fillAndSubmit();
     await screen.findByText('00:05');
 
-    // After results the Jump button is latched off (label swaps to the hint), so
-    // clicking it is a no-op and the cached results are served only once.
     const user = userEvent.setup();
-    const latched = screen.getByRole('button', {
-      name: 'Search again',
-    });
-    expect(latched).toHaveAccessibleDescription('Edit the URL or phrase to search again.');
-    await user.click(latched);
+    await user.click(screen.getByRole('button', { name: 'Search' }));
     expect(await screen.findByText('00:05')).toBeInTheDocument();
     expect(mockSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it('latches the Jump button off after results until the inputs change', async () => {
+  it('keeps the search action available after results', async () => {
     mockSubmit.mockResolvedValue({ status: 'found', results: RESULTS });
     await fillAndSubmit();
     await screen.findByText('00:05');
 
-    const latched = screen.getByRole('button', {
-      name: 'Search again',
-    });
-    expect(latched).toBeDisabled();
-    expect(latched).not.toHaveAccessibleName('Jump to the moment');
-
-    const user = userEvent.setup();
-    await user.type(screen.getByLabelText('Word or phrase'), 'x');
-    expect(screen.getByRole('button', { name: 'Jump to the moment' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Search' })).toBeEnabled();
+    expect(screen.getByLabelText('Search this video')).toHaveValue('hello world');
   });
 
   it('uses the real progress reported by the backend while processing', async () => {
@@ -252,6 +261,35 @@ describe('App', () => {
     expect(await screen.findByText('Ready to find your moment')).toBeInTheDocument();
   });
 
+  it('returns to the fresh landing view when the logo is clicked', async () => {
+    mockSubmit.mockResolvedValue({ status: 'found', results: RESULTS });
+    await fillAndSubmit();
+    expect(await screen.findByText('00:05')).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('link', { name: 'Qfza home' }));
+
+    expect(await screen.findByRole('button', { name: 'Jump to video' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Video URL')).toHaveValue('');
+    expect(screen.queryByText('00:05')).toBeNull();
+    expect(screen.queryByLabelText('Search this video')).toBeNull();
+  });
+
+  it('clears a shared-moment deep link when the logo is clicked', async () => {
+    window.history.replaceState({}, '', '/?v=abcdef12345&t=62');
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Shared moment at 01:02' }),
+    ).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('link', { name: 'Qfza home' }));
+
+    await waitFor(() => expect(window.location.search).toBe(''));
+    expect(await screen.findByRole('button', { name: 'Jump to video' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Shared moment at 01:02' })).toBeNull();
+  });
+
   it('opens a shared-moment link into the shared view with the video pre-filled', async () => {
     window.history.replaceState({}, '', '/?v=abcdef12345&t=62');
     try {
@@ -282,11 +320,11 @@ describe('App', () => {
       expect(screen.getByLabelText('Video URL')).toHaveValue(
         `https://drive.google.com/file/d/${driveId}/view`,
       );
-      // The Drive file plays through its own preview frame, not YouTube's player.
-      expect(screen.getByTitle('Video preview')).toHaveAttribute(
-        'src',
-        `https://drive.google.com/file/d/${driveId}/preview`,
-      );
+      // The Drive file plays through a native video element sourced from
+      // Drive's Range-capable media endpoint, not the preview iframe.
+      const player = screen.getByTitle('Video preview');
+      expect(player.tagName).toBe('VIDEO');
+      expect(player).toHaveAttribute('src', buildDriveStreamUrl(driveId));
     } finally {
       window.history.replaceState({}, '', '/');
     }

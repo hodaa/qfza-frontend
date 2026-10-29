@@ -60,6 +60,7 @@
   --color-warning-soft: #fef3c7; /* amber-100 background tint */
   --color-accent: #ea580c; /* orange-600 — brand accent (adjusted from #fe5d01) */
   --color-accent-strong: #c2410c; /* orange-700 for hover */
+  --color-accent-deep: #9a3412; /* orange-800 — accent CTA hover */
   --color-youtube: #ff0000; /* YouTube brand red — third-party mark, kept exact */
 
   /* Supporting text tones. Declared inside `@theme` (not just `:root`) so
@@ -105,18 +106,6 @@
   --font-sans:
     'Barlow Condensed ExtraBold', 'Plus Jakarta Sans', 'Inter', 'Segoe UI', 'Helvetica Neue', Arial,
     'Noto Sans Arabic', 'Segoe UI Arabic', system-ui, sans-serif;
-}
-
-/* Base script-alignment for the search inputs. The ::placeholder partner rules
-   live only in SearchForm's injected stylesheet (single source — AGENTS.md). */
-.search-input--rtl {
-  text-align: right !important;
-  direction: rtl;
-}
-
-.search-input--ltr {
-  text-align: left !important;
-  direction: ltr;
 }
 
 /* Arabic text renders with a dedicated Latin+Arabic friendly typeface. */
@@ -304,19 +293,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.step-icon {
-  display: inline-block;
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-  opacity: 0.8;
-  transition: all 0.3s ease;
-}
-
-.step:hover .step-icon {
-  opacity: 1;
-  transform: scale(1.15);
 }
 
 .step:not(:last-child)::after {
@@ -545,56 +521,12 @@ body {
   }
 }
 
-@keyframes fade-in-down {
-  from {
-    opacity: 0;
-    transform: translateY(-12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes glow-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 var(--color-focus);
-  }
-  50% {
-    box-shadow: 0 0 0 10px rgba(30, 58, 138, 0);
-  }
-}
-
 .animate-fade-in {
   animation: fade-in 0.6s ease-out;
 }
 
 .animate-fade-in-up {
   animation: fade-in-up 0.6s ease-out;
-}
-
-.animate-fade-in-down {
-  animation: fade-in-down 0.6s ease-out;
-}
-
-.animate-scale-in {
-  animation: scale-in 0.3s ease-out;
-}
-
-.animate-glow-pulse {
-  animation: glow-pulse 2s infinite;
 }
 
 /* ── Error boundary ── */
@@ -627,5 +559,10 @@ body {
 
   .progress-indeterminate {
     animation: none;
+  }
+
+  .animate-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
   }
 }

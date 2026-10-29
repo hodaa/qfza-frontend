@@ -58,21 +58,21 @@ describe('Landing sections', () => {
     document.head.appendChild(description);
     try {
       await act(async () => setLanguage('en'));
-      expect(document.title).toBe('Qfza — Search Inside YouTube Videos & Jump to the Moment');
+      expect(document.title).toBe('Qfza — Search Inside Videos & Jump to the Moment');
       expect(description.content).toBe(
-        'Qfza lets you search inside YouTube videos and their transcripts for any word or phrase, then jump straight to the exact timestamp where it appears.',
+        'Qfza lets you search inside videos and their transcripts for any word or phrase, then jump straight to the exact timestamp where it appears.',
       );
 
       await act(async () => setLanguage('ar'));
-      expect(document.title).toBe('قفزة — ابحث داخل فيديوهات يوتيوب وانتقل إلى اللحظة');
+      expect(document.title).toBe('قفزة — ابحث داخل الفيديوهات وانتقل إلى اللحظة');
       expect(description.content).toBe(
-        'قفزة يتيح لك البحث داخل فيديوهات يوتيوب ونصوصها التفرغية عن أي كلمة أو عبارة، ثم الانتقال مباشرةً إلى التوقيت الذي تظهر فيه.',
+        'قفزة يتيح لك البحث داخل الفيديوهات ونصوصها التفرغية عن أي كلمة أو عبارة، ثم الانتقال مباشرةً إلى التوقيت الذي تظهر فيه.',
       );
 
       await act(async () => setLanguage('en'));
-      expect(document.title).toBe('Qfza — Search Inside YouTube Videos & Jump to the Moment');
+      expect(document.title).toBe('Qfza — Search Inside Videos & Jump to the Moment');
       expect(description.content).toBe(
-        'Qfza lets you search inside YouTube videos and their transcripts for any word or phrase, then jump straight to the exact timestamp where it appears.',
+        'Qfza lets you search inside videos and their transcripts for any word or phrase, then jump straight to the exact timestamp where it appears.',
       );
     } finally {
       description.remove();
@@ -136,7 +136,7 @@ describe('Landing sections', () => {
 
   it('renders the hero headline with the search card slot', () => {
     render(<Hero>search card</Hero>);
-    expect(screen.getByText('Search Inside YouTube Videos')).toBeInTheDocument();
+    expect(screen.getByText('Search Inside Videos')).toBeInTheDocument();
     expect(screen.getByText('search card')).toBeInTheDocument();
   });
 
@@ -144,7 +144,7 @@ describe('Landing sections', () => {
     const { container } = render(<Hero compact />);
     const subtitle = container.querySelector('h1 + p');
     expect(subtitle?.textContent).toBe(
-      'Paste a YouTube video URL and search for any word or phrase. Qfza finds where it appears and lets you jump directly to that moment.',
+      'Paste a video URL and search for any word or phrase. Qfza finds where it appears and lets you jump directly to that moment.',
     );
     expect(subtitle?.className).toContain('text-muted-strong');
     expect(subtitle?.className).not.toContain('text-slate-600');
@@ -280,7 +280,7 @@ describe('Landing sections', () => {
     expect(screen.getByText('Exact phrase matching')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'How it works' })).toBeInTheDocument();
     expect(screen.getByText('Paste a video URL')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Jump to the moment' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Jump to video' })).toBeInTheDocument();
   });
 });
 
@@ -348,6 +348,6 @@ describe('static document metadata ownership', () => {
   it('still re-brands the app views, which own their metadata', async () => {
     window.history.replaceState(null, '', '/login');
     await act(async () => setLanguage('en'));
-    expect(document.title).toBe('Qfza — Search Inside YouTube Videos & Jump to the Moment');
+    expect(document.title).toBe('Qfza — Search Inside Videos & Jump to the Moment');
   });
 });

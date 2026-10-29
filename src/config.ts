@@ -20,11 +20,6 @@ export const SITE_URL: string = (
 export const CONTACT_EMAIL: string =
   (import.meta.env.VITE_CONTACT_EMAIL as string | undefined)?.trim() ?? 'support@qfza.app';
 
-/** Whether an explicit contact email was provided in the build env. */
-export const CONTACT_EMAIL_CONFIGURED: boolean = Boolean(
-  import.meta.env.VITE_CONTACT_EMAIL?.trim(),
-);
-
 /** API base the search client talks to. */
 const API_BASE_URL: string =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';

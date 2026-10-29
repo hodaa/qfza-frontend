@@ -2,12 +2,12 @@
   "app": {
     "title": "Qfza",
     "logoAlt": "Qfza",
-    "pageTitle": "Qfza — Search Inside YouTube Videos & Jump to the Moment",
-    "metaDescription": "Qfza lets you search inside YouTube videos and their transcripts for any word or phrase, then jump straight to the exact timestamp where it appears.",
-    "ogTitle": "Qfza | Search Inside YouTube Videos",
-    "ogDescription": "Search inside YouTube videos and their transcripts for any word or phrase, then jump directly to the exact timestamp it appears.",
+    "pageTitle": "Qfza — Search Inside Videos & Jump to the Moment",
+    "metaDescription": "Qfza lets you search inside videos and their transcripts for any word or phrase, then jump straight to the exact timestamp where it appears.",
+    "ogTitle": "Qfza | Search Inside Videos",
+    "ogDescription": "Search inside videos and their transcripts for any word or phrase, then jump directly to the exact timestamp it appears.",
     "ogImage": "/og-en.png",
-    "ogImageAlt": "Qfza — search inside YouTube videos",
+    "ogImageAlt": "Qfza — search inside videos",
     "ogLocale": "en_US",
     "ogLocaleAlternate": "ar_SA"
   },
@@ -48,8 +48,8 @@
     "primary": "Primary"
   },
   "hero": {
-    "title": "Search Inside YouTube Videos",
-    "subtitle": "Paste a YouTube video URL and search for any word or phrase. Qfza finds where it appears and lets you jump directly to that moment."
+    "title": "Search Inside Videos",
+    "subtitle": "Paste a video URL and search for any word or phrase. Qfza finds where it appears and lets you jump directly to that moment."
   },
   "features": {
     "title": "Why Qfza",
@@ -87,27 +87,13 @@
     "opensInNewTab": "Opens in a new tab"
   },
   "form": {
-    "title": "Search a video for a word or phrase",
     "urlLabel": "Video URL",
-    "urlPlaceholder": "e.g. https://youtu.be/dQw4w9WgXcQ",
-    "keywordLabel": "Word or phrase",
-    "keywordPlaceholder": "e.g. never gonna give you up",
     "paste": "Paste",
     "pasteTooltip": "Paste video URL from clipboard",
     "pasteBlocked": "Clipboard access isn’t available here.",
     "clearUrl": "Clear video URL",
     "clearKeywordField": "Clear word or phrase",
-    "helperAccepted": "Public YouTube videos and Google Drive files.",
-    "helperSpeed": "First search: a few minutes. Cached searches are usually faster.",
-    "helperPrivacy": "If you sign in, your searches are saved to your account history.",
-    "submit": "Jump to the moment",
-    "searching": "Searching…",
-    "clear": "Clear fields",
-    "pasteEmpty": "Your clipboard is empty. Copy a video URL first, then try Paste again.",
-    "pasteManual": "On a phone, touch and hold the URL field and choose Paste. On a computer, press <strong>Ctrl/⌘+V</strong>.",
-    "processingHint": "Search in progress. The URL and phrase are locked until the transcript is ready.",
-    "searchAgainHint": "Search again",
-    "searchAgainNote": "Edit the URL or phrase to search again."
+    "landingHelper": "Public YouTube or Google Drive video — not a channel, playlist, or Short."
   },
   "status": {
     "title": "Transcribing video",
@@ -124,7 +110,9 @@
     "loadingMoment": "Loading video — we’ll jump to {{timestamp}} when it’s ready.",
     "unavailable": "Video preview unavailable",
     "unavailableHint": "The embedded player couldn’t load. You can still open the video or a matching moment on YouTube.",
-    "playbackBlocked": "Playback didn’t start. Press Play in the video, or open this moment on YouTube."
+    "playbackBlocked": "Playback didn’t start. Press Play in the video, or open this moment on YouTube.",
+    "drivePreviewHint": "Using Drive preview because the video couldn’t play here. Jumping to a moment isn’t available in this mode.",
+    "drivePlaybackBlocked": "Playback didn’t start. Press Play in the video."
   },
   "results": {
     "title": "Matches for “<keyword>{{keyword}}</keyword>”",
@@ -140,11 +128,19 @@
     "idleTitle": "Ready to find your moment",
     "idleMockLabel": "Illustrative preview of what a search returns",
     "seek": "Play at {{timestamp}} — {{snippet}}",
-    "noSnippet": "Exact match",
     "downloadTranscript": "Download full transcript (PDF)",
+    "prepareTranscript": "Prepare transcript (PDF)",
+    "cancelTranscript": "Cancel transcript preparation",
+    "preparingTranscriptHint": "Preparing the transcript before this download starts. Long videos can take several minutes. Click the button again to cancel.",
+    "transcriptFailed": "Could not prepare the transcript. Please try again.",
     "downloadVideo": "Download video (MP4)",
+    "generateNotes": "Download summary (PDF)",
+    "cancelNotes": "Cancel summary",
+    "preparingNotesHint": "AI is reading the transcript and writing your summary. Long videos can take several minutes. Click the button again to cancel.",
+    "notesFailed": "Could not prepare the summary. Please try again.",
+    "notesReady": "The summary is ready.",
+    "regenerateNotes": "Regenerate summary",
     "downloadMoment": "Download from {{timestamp}} to the end (MP4)",
-    "preparingVideo": "Preparing video…",
     "cancelDownload": "Cancel download",
     "preparingVideoHint": "The download will start automatically when the video is ready. Long videos can take several minutes. Click the button again to cancel.",
     "downloadDialogTitle": "Download video",
@@ -168,14 +164,27 @@
     "showMore_other": "Show {{count}} more matches",
     "watchOnYouTube": "Watch on YouTube",
     "watchMoment": "Watch on YouTube at {{timestamp}} (opens in a new tab)",
-    "share": "Share",
     "shareMoment": "Share link to {{timestamp}}"
   },
   "shared": {
     "title": "Shared moment at {{timestamp}}",
-    "hint": "Add a word or phrase on the left to find every moment in this video.",
+    "hint": "Add a word or phrase above to find every moment in this video.",
     "savedBadge": "Saved moment",
     "momentListLabel": "The saved moment"
+  },
+  "workspace": {
+    "urlPlaceholder": "Paste a YouTube or Google Drive link",
+    "load": "Jump to video",
+    "loading": "Jumping to video…",
+    "searchLabel": "Search this video",
+    "searchPlaceholder": "e.g. supply and demand",
+    "search": "Search",
+    "searching": "Searching…",
+    "searchAvailableAfterLoad": "The keyword search opens once a video is loaded.",
+    "videoLabel": "Loaded video",
+    "videoLoading": "Loading video details…",
+    "actionsUnavailable": "Actions will appear when the video finishes loading.",
+    "loadFailed": "Could not load this video. Check the link and try again."
   },
   "error": {
     "validation": "Please enter a video URL and a word or phrase.",
@@ -186,7 +195,6 @@
     "jobGone": "This transcription job no longer exists. Please search again.",
     "boundary": "Something unexpected went wrong. Please reload the page and try again.",
     "failed": "Transcription failed: {{message}}",
-    "noTranscript": "No transcript available: {{message}}",
     "network": "Could not connect. Check your internet connection and try again. If it continues, please try later.",
     "timeout": "This is taking longer than expected. Your inputs have been kept — please try again later.",
     "title": "Search error",
@@ -197,7 +205,6 @@
   "actions": {
     "retry": "Try again",
     "reload": "Reload page",
-    "language": "العربية",
     "languageSelector": "Language",
     "cancelSearch": "Cancel search",
     "skipToContent": "Skip to main content"
@@ -254,7 +261,11 @@
       "password": "Password",
       "currentPassword": "Current password",
       "newPassword": "New password",
-      "confirmPassword": "Confirm new password"
+      "confirmPassword": "Confirm new password",
+      "emailRequired": "Enter your email address.",
+      "passwordRequired": "Enter your password.",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password"
     },
     "working": "Working…",
     "or": "or",
@@ -265,8 +276,7 @@
       "submit": "Sign in",
       "noAccount": "No account yet?",
       "createOne": "Create one",
-      "googleHint": "Signed up with Google? Google accounts don't have a password — use the button below to sign in.",
-      "tryGoogle": "Try Google instead"
+      "googleHint": "Signed up with Google? Google accounts don't have a password — use the button below to sign in."
     },
     "register": {
       "title": "Create your account",
@@ -321,7 +331,6 @@
     },
     "history": {
       "title": "Your searches",
-      "loading": "Loading your searches…",
       "signInRequired": "Sign in to see your searches.",
       "signIn": "Sign in",
       "empty": "No searches yet",
@@ -378,11 +387,9 @@
       "methodGoogle": "Google only — no password",
       "methodPassword": "Google and password",
       "memberSince": "Member since",
-      "setTitle": "Set a password",
       "setBody": "You signed up with Google, so this account has no password yet. Add one and you will be able to sign in without Google.",
       "setAction": "Email me a link to set my password",
       "changeBody": "You already have a password. Changing it here keeps you signed in on this device and signs out every other one.",
-      "changeAction": "Email me a link to change my password",
       "changeLink": "Change password",
       "emailLinkInstead": "or email me a link",
       "changeSubmit": "Change password",

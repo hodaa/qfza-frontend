@@ -1,13 +1,19 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { videoDownloadUrl } from '../api/client';
+import { usePreparingAction } from '../hooks/usePreparingAction';
 import { usePreparingDownload } from '../hooks/usePreparingDownload';
-import { IconFileText, IconVideo } from './icons';
+import { usePreparingNotes } from '../hooks/usePreparingNotes';
+import { IconBolt, IconFileText, IconVideo } from './icons';
 import { VideoDownloadDialog } from './VideoDownloadDialog';
 
 interface Props {
   transcriptUrl?: string;
-  videoYoutubeId?: string;
+  videoId?: string;
+  showQuality: boolean;
+  allowNotes?: boolean;
+  transcriptReady?: boolean;
+  ensureTranscript?: (signal: AbortSignal) => Promise<void>;
 }
 
 const BUTTON_BASE =
@@ -22,14 +28,29 @@ const SPINNER =
   'h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700';
 
 /** Wrapping download actions and a status row below the headline. */
-export function ResultsToolbar({ transcriptUrl, videoYoutubeId }: Props) {
+export function ResultsToolbar({
+  transcriptUrl,
+  videoId,
+  showQuality,
+  allowNotes = true,
+  transcriptReady = true,
+  ensureTranscript,
+}: Props) {
   const { t } = useTranslation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const {
     preparing: preparingVideo,
     beginDownload,
     cancelDownload: cancelVideoDownload,
-  } = usePreparingDownload(videoYoutubeId);
+  } = usePreparingDownload(videoId);
+  const {
+    preparing: preparingTranscript,
+    failed: transcriptFailed,
+    begin: beginTranscript,
+    cancel: cancelTranscript,
+  } = usePreparingAction(videoId ? `transcript:${videoId}` : undefined);
+  const { preparingNotes, notesFailed, notesReady, beginNotes, regenerateNotes, cancelNotes } =
+    usePreparingNotes(videoId, ensureTranscript);
 
   const handleVideoClick = () => {
     // Always the dialog, never a direct download: a click opens the quality
@@ -42,28 +63,44 @@ export function ResultsToolbar({ transcriptUrl, videoYoutubeId }: Props) {
     setDialogOpen(true);
   };
 
+  const handleTranscriptClick = () => {
+    if (preparingTranscript) {
+      cancelTranscript();
+      return;
+    }
+    if (!transcriptUrl || !ensureTranscript) {
+      return;
+    }
+    beginTranscript(async (signal) => {
+      await ensureTranscript(signal);
+      window.location.assign(transcriptUrl);
+    });
+  };
+
+  const handleNotesClick = () => {
+    if (preparingNotes) {
+      cancelNotes();
+      return;
+    }
+    beginNotes();
+  };
+
   const handleDownloadSection = (
     startSeconds: number | null,
     endSeconds: number | null,
     height: number | null,
   ) => {
-    if (!videoYoutubeId) {
+    if (!videoId) {
       return;
     }
     setDialogOpen(false);
-    beginDownload(videoDownloadUrl(videoYoutubeId, startSeconds, endSeconds, height));
+    beginDownload(videoDownloadUrl(videoId, startSeconds, endSeconds, height));
   };
 
   return (
     <div className="@container/toolbar flex w-full min-w-0 flex-col gap-2">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        {transcriptUrl ? (
-          <a className={BUTTON} href={transcriptUrl} download>
-            <IconFileText />
-            {t('results.downloadTranscript')}
-          </a>
-        ) : null}
-        {videoYoutubeId ? (
+        {videoId ? (
           <button
             type="button"
             className={preparingVideo ? BUTTON_PENDING : BUTTON}
@@ -78,16 +115,85 @@ export function ResultsToolbar({ transcriptUrl, videoYoutubeId }: Props) {
             {preparingVideo ? t('results.cancelDownload') : t('results.downloadVideo')}
           </button>
         ) : null}
+        {transcriptUrl && transcriptReady ? (
+          <a className={BUTTON} href={transcriptUrl} download>
+            <IconFileText />
+            {t('results.downloadTranscript')}
+          </a>
+        ) : null}
+        {transcriptUrl && !transcriptReady ? (
+          <button
+            type="button"
+            className={preparingTranscript ? BUTTON_PENDING : BUTTON}
+            aria-busy={preparingTranscript || undefined}
+            onClick={handleTranscriptClick}
+          >
+            {preparingTranscript ? (
+              <span aria-hidden="true" className={SPINNER} />
+            ) : (
+              <IconFileText />
+            )}
+            {preparingTranscript ? t('results.cancelTranscript') : t('results.prepareTranscript')}
+          </button>
+        ) : null}
+        {videoId && allowNotes ? (
+          <button
+            type="button"
+            className={preparingNotes ? BUTTON_PENDING : BUTTON}
+            aria-busy={preparingNotes || undefined}
+            onClick={handleNotesClick}
+          >
+            {preparingNotes ? (
+              <span aria-hidden="true" className={SPINNER} />
+            ) : (
+              <IconBolt size={16} />
+            )}
+            {preparingNotes ? t('results.cancelNotes') : t('results.generateNotes')}
+          </button>
+        ) : null}
       </div>
       {preparingVideo ? (
         <p role="status" className="text-xs font-medium text-slate-500">
           {t('results.preparingVideoHint')}
         </p>
       ) : null}
-      {dialogOpen && videoYoutubeId ? (
+      {preparingTranscript ? (
+        <p role="status" className="text-xs font-medium text-slate-500">
+          {t('results.preparingTranscriptHint')}
+        </p>
+      ) : null}
+      {preparingNotes ? (
+        <p role="status" className="text-xs font-medium text-slate-500">
+          {transcriptReady ? t('results.preparingNotesHint') : t('results.preparingTranscriptHint')}
+        </p>
+      ) : null}
+      {transcriptFailed && !preparingTranscript ? (
+        <p role="alert" className="text-xs font-medium text-danger">
+          {t('results.transcriptFailed')}
+        </p>
+      ) : null}
+      {notesFailed && !preparingNotes ? (
+        <p role="alert" className="text-xs font-medium text-danger">
+          {t('results.notesFailed')}
+        </p>
+      ) : null}
+      {notesReady && !preparingNotes ? (
+        <p role="status" className="text-xs font-medium text-success">
+          {t('results.notesReady')}{' '}
+          <button
+            type="button"
+            className="font-semibold underline underline-offset-2 hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-action"
+            onClick={regenerateNotes}
+          >
+            {t('results.regenerateNotes')}
+          </button>
+        </p>
+      ) : null}
+      {dialogOpen && videoId ? (
         <VideoDownloadDialog
-          key={videoYoutubeId}
-          youtubeId={videoYoutubeId}
+          key={videoId}
+          videoId={videoId}
+          showQuality={showQuality}
           onClose={() => setDialogOpen(false)}
           onDownload={handleDownloadSection}
         />

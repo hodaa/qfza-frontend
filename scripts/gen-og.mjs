@@ -80,14 +80,14 @@ function card({ out, logo, tagline, subline }) {
 card({
   out: 'og-en.png',
   logo: 'logo-en.png',
-  tagline: 'Search inside YouTube videos',
+  tagline: 'Search inside videos',
   subline: 'Find any word or phrase — and the exact timestamp it appears.',
 });
 
 card({
   out: 'og-ar.png',
   logo: 'logo-en.png',
-  tagline: 'ابحث داخل فيديوهات يوتيوب',
+  tagline: 'ابحث داخل الفيديوهات',
   subline: 'اعثر على أي كلمة أو عبارة في Timestamp بالضبط.',
 });
 

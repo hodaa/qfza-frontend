@@ -5,7 +5,7 @@ import type { AuthResponse, AuthUser, HistoryPage, SessionInfo } from '../types'
 export const AUTH_UNAUTHENTICATED_EVENT = 'qfza:auth-unauthenticated';
 
 /** Dispatch a global event to notify listeners that the session was lost. */
-export function emitAuthUnauthenticated(): void {
+function emitAuthUnauthenticated(): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new Event(AUTH_UNAUTHENTICATED_EVENT));
 }

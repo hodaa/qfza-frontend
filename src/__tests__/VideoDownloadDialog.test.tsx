@@ -11,12 +11,13 @@ vi.mock('../api/client', () => ({
 const formatsMock = vi.mocked(fetchVideoFormats);
 
 /** Render the dialog with both callbacks spied on. */
-function setup(initialStart?: string) {
+function setup(initialStart?: string, showQuality = true) {
   const onClose = vi.fn();
   const onDownload = vi.fn();
   const view = render(
     <VideoDownloadDialog
-      youtubeId="abcdef12345"
+      videoId="abcdef12345"
+      showQuality={showQuality}
       initialStart={initialStart}
       onClose={onClose}
       onDownload={onDownload}
@@ -96,6 +97,13 @@ describe('VideoDownloadDialog', () => {
     const options = screen.getAllByRole('option').map((option) => option.textContent);
     expect(options).toEqual(['Choose quality', '1080p', '720p', '360p']);
     expect(quality).toBeEnabled();
+  });
+
+  it('hides the quality field and skips probing for non-YouTube videos', () => {
+    setup(undefined, false);
+
+    expect(screen.queryByLabelText('Quality')).not.toBeInTheDocument();
+    expect(formatsMock).not.toHaveBeenCalled();
   });
 
   it('sends the chosen quality with the range', async () => {

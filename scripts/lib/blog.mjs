@@ -25,7 +25,7 @@ export const CONTENT_DIR = resolve(ROOT, 'content/blog');
 // Blog index intro copy lives outside CONTENT_DIR on purpose: loadPosts() reads
 // every .md under content/blog/<locale>/ and would turn an index file into a
 // post with no date. A sibling directory keeps post discovery unchanged.
-export const INDEX_DIR = resolve(ROOT, 'content/blog-index');
+const INDEX_DIR = resolve(ROOT, 'content/blog-index');
 
 /** Intro copy for the /blog/ index, rendered above the post list. */
 export async function loadIndexIntro(locale) {
@@ -485,7 +485,7 @@ ${post.html}
  * plus just enough of the description to decide whether to open the post. Cut
  * on a word boundary so the sample never ends mid-word.
  */
-export function excerpt(text, limit = 120) {
+function excerpt(text, limit = 120) {
   const clean = String(text).trim().replace(/\s+/g, ' ');
   if (clean.length <= limit) return clean;
   const cut = clean.slice(0, limit);

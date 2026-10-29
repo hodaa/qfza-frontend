@@ -2,8 +2,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
-import { submitSearch } from '../api/client';
+import { resolveVideo, submitSearch } from '../api/client';
 import { clearResultsCache } from '../utils/resultsCache';
+import type { ResolvedVideo } from '../types';
 
 /**
  * Signing out has to leave nothing of the previous session on screen.
@@ -21,7 +22,13 @@ import { clearResultsCache } from '../utils/resultsCache';
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
-  return { ...actual, submitSearch: vi.fn(), fetchVideoSearch: vi.fn(), fetchJobStatus: vi.fn() };
+  return {
+    ...actual,
+    submitSearch: vi.fn(),
+    fetchVideoSearch: vi.fn(),
+    fetchJobStatus: vi.fn(),
+    resolveVideo: vi.fn(),
+  };
 });
 
 const USER: MockUser = { id: 'u1', email: 'a@example.com', email_verified: true };
@@ -78,6 +85,13 @@ vi.mock('../auth/useAuth', async () => {
 
 const RESULTS = [{ timestamp: '00:05', progress_seconds: 5, text_snippet: null }];
 const URL_UNDER_TEST = 'https://www.youtube.com/watch?v=abcdef12345';
+const RESOLVED: ResolvedVideo = {
+  id: 'video-row-1',
+  video_id: 'abcdef12345',
+  title: 'Test video',
+  duration_seconds: 300,
+  transcribed: false,
+};
 
 /** Sign in, search, and leave a filled-in result on screen. */
 async function searchAsSignedInUser(): Promise<ReturnType<typeof render>> {
@@ -85,8 +99,9 @@ async function searchAsSignedInUser(): Promise<ReturnType<typeof render>> {
   const view = render(<App />);
   const user = userEvent.setup();
   await user.type(screen.getByLabelText('Video URL'), URL_UNDER_TEST);
-  await user.type(screen.getByLabelText('Word or phrase'), 'how to type faster');
-  await user.click(screen.getByRole('button', { name: 'Jump to the moment' }));
+  await user.click(screen.getByRole('button', { name: 'Jump to video' }));
+  await user.type(await screen.findByLabelText('Search this video'), 'how to type faster');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
   await screen.findByText('00:05');
   return view;
 }
@@ -102,6 +117,7 @@ describe('signing out', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearResultsCache();
+    vi.mocked(resolveVideo).mockResolvedValue(RESOLVED);
     authStore.set(USER);
     window.history.replaceState(null, '', '/');
   });
@@ -110,7 +126,7 @@ describe('signing out', () => {
     await searchAsSignedInUser();
     await signOutFromMenu();
 
-    expect(await screen.findByRole('button', { name: 'Jump to the moment' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Jump to video' })).toBeInTheDocument();
     expect(screen.getByLabelText('Video URL')).toBeInTheDocument();
   });
 
@@ -119,24 +135,26 @@ describe('signing out', () => {
     await signOutFromMenu();
 
     await waitFor(() => expect(screen.getByLabelText('Video URL')).toHaveValue(''));
-    expect(screen.getByLabelText('Word or phrase')).toHaveValue('');
+    expect(screen.queryByLabelText('Search this video')).not.toBeInTheDocument();
   });
 
   it('takes the previous results with it', async () => {
     await searchAsSignedInUser();
     await signOutFromMenu();
 
-    // The match, the player's position and the empty-results notice all belonged
-    // to the search that just ended.
+    // The match and the empty-results notice both belonged to the search that
+    // just ended.
     await waitFor(() => expect(screen.queryByText('00:05')).toBeNull());
     expect(screen.queryByText(/no exact matches found/i)).toBeNull();
   });
 
-  it('returns to the idle view, not a half-finished search', async () => {
+  it('returns to the landing view, not a half-finished search', async () => {
     await searchAsSignedInUser();
     await signOutFromMenu();
 
-    expect(await screen.findByText('Ready to find your moment')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Jump to video' })).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 
   it('leaves the previous visitor no deep link to come back to', async () => {

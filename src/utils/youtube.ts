@@ -43,27 +43,6 @@ export function readYouTubeVideo(parsed: URL): YouTubeUrlInfo | null {
 }
 
 /**
- * Only accept the watch/share formats currently offered by the search form.
- * Distinguish unsupported sources/formats so the form can explain how to fix a link.
- */
-export function inspectYouTubeUrl(url: string): YouTubeUrlInfo {
-  try {
-    const parsed = new URL(url);
-    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
-      return { id: null, issue: 'invalid' };
-    }
-    return readYouTubeVideo(parsed) ?? { id: null, issue: 'unsupportedSource' };
-  } catch {
-    return { id: null, issue: 'invalid' };
-  }
-}
-
-/** Extract the 11-character id from a supported YouTube URL. */
-export function parseYouTubeId(url: string): string | null {
-  return inspectYouTubeUrl(url).id;
-}
-
-/**
  * Read a `MM:SS` or `HH:MM:SS` time back into seconds - the inverse of
  * `formatYouTubeTime`, for the segment-download fields. A bare number is read
  * as seconds, and `null` means the field was left empty rather than wrong;

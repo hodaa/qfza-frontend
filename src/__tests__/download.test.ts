@@ -1,12 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { consumeVideoDownload, createVideoDownload, fetchVideoDownloadStatus } from '../api/client';
-import type { VideoDownloadStatus } from '../types';
-import { downloadNameFor, saveDownload } from '../utils/download';
+import {
+  consumeVideoDownload,
+  createVideoDownload,
+  createVideoNotes,
+  fetchVideoDownloadStatus,
+  fetchVideoNotesStatus,
+} from '../api/client';
+import type { VideoDownloadStatus, VideoNotesStatus } from '../types';
+import { downloadNameFor, notesNameFor, saveDownload, saveNotes } from '../utils/download';
 
 vi.mock('../api/client', () => ({
   createVideoDownload: vi.fn(),
   fetchVideoDownloadStatus: vi.fn(),
   consumeVideoDownload: vi.fn(),
+  createVideoNotes: vi.fn(),
+  fetchVideoNotesStatus: vi.fn(),
 }));
 
 const VIDEO_URL = 'http://api.test/api/videos/abc123/video.mp4';
@@ -15,6 +23,8 @@ const SECTION_URL = 'http://api.test/api/videos/abc123/video.mp4?start=30&height
 const createMock = vi.mocked(createVideoDownload);
 const statusMock = vi.mocked(fetchVideoDownloadStatus);
 const consumeMock = vi.mocked(consumeVideoDownload);
+const createNotesMock = vi.mocked(createVideoNotes);
+const notesStatusMock = vi.mocked(fetchVideoNotesStatus);
 
 function downloadStatus(overrides: Partial<VideoDownloadStatus> = {}): VideoDownloadStatus {
   return {
@@ -73,6 +83,17 @@ describe('downloadNameFor', () => {
     );
   });
 });
+
+function notesStatus(overrides: Partial<VideoNotesStatus> = {}): VideoNotesStatus {
+  return {
+    id: 'n-1',
+    status: 'ready',
+    url: 'https://blob.test/notes.pdf',
+    error: null,
+    filename: 'notes-abc123.pdf',
+    ...overrides,
+  };
+}
 
 describe('saveDownload', () => {
   beforeEach(() => {
@@ -192,5 +213,67 @@ describe('saveDownload', () => {
     await saveDownload(VIDEO_URL);
 
     expect(clicked).toHaveLength(1);
+  });
+});
+
+describe('notesNameFor', () => {
+  it('names the PDF after its video id', () => {
+    expect(notesNameFor('abc123')).toBe('notes-abc123.pdf');
+  });
+
+  it('sanitizes unexpected characters in the id', () => {
+    expect(notesNameFor('a/b c')).toBe('notes-abc.pdf');
+  });
+});
+
+describe('saveNotes', () => {
+  beforeEach(() => {
+    createNotesMock.mockReset();
+    notesStatusMock.mockReset();
+    createNotesMock.mockResolvedValue({ id: 'n-1', status: 'pending' });
+    notesStatusMock.mockResolvedValue(notesStatus());
+  });
+
+  it('queues, polls, and saves the PDF', async () => {
+    notesStatusMock
+      .mockResolvedValueOnce(notesStatus({ status: 'processing', url: null }))
+      .mockResolvedValueOnce(notesStatus());
+    const fetchMock = stubBlobFetch();
+    const { clicked } = spyClicks();
+
+    vi.useFakeTimers();
+    const pending = saveNotes('abc123');
+    await vi.advanceTimersByTimeAsync(3000);
+    await pending;
+
+    expect(createNotesMock).toHaveBeenCalledWith('abc123', undefined, false);
+    expect(fetchMock).toHaveBeenCalledWith('https://blob.test/notes.pdf', {
+      signal: undefined,
+    });
+    expect(clicked[0]?.download).toBe('notes-abc123.pdf');
+    expect(consumeMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects with the server message when generation failed', async () => {
+    notesStatusMock.mockResolvedValue(
+      notesStatus({ status: 'failed', url: null, error: 'Lecture notes failed' }),
+    );
+    const { clicked } = spyClicks();
+
+    await expect(saveNotes('abc123')).rejects.toThrow('Lecture notes failed');
+    expect(clicked).toHaveLength(0);
+  });
+
+  it('rejects and never clicks when the wait is aborted', async () => {
+    notesStatusMock.mockResolvedValue(notesStatus({ status: 'processing', url: null }));
+    const { clicked } = spyClicks();
+    const controller = new AbortController();
+
+    vi.useFakeTimers();
+    const pending = saveNotes('abc123', controller.signal);
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    await expect(pending).rejects.toBeInstanceOf(DOMException);
+    expect(clicked).toHaveLength(0);
   });
 });

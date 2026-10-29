@@ -30,11 +30,6 @@ export interface LegalPage {
   hydrate?: boolean;
 }
 
-export declare const LOCALES: Record<
-  string,
-  { dir: 'ltr' | 'rtl'; prefix: string; ogLocale: string }
->;
-
 export declare const ROOT: string;
 
 export declare const CONTENT_DIR: string;

@@ -5,7 +5,7 @@ import { marked } from 'marked';
 import { LOCALES, ROOT, parseFrontmatter, document_, esc } from './blog.mjs';
 import { HEADER_CSS, renderHeader } from './header.mjs';
 
-export { LOCALES, ROOT };
+export { ROOT };
 export const CONTENT_DIR = resolve(ROOT, 'content/legal');
 /**
  * The FAQ lives in its own directory rather than beside the policies, because it

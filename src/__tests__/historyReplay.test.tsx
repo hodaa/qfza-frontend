@@ -2,13 +2,27 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
-import { fetchVideoSearch, submitSearch } from '../api/client';
-import type { HistoryEntry } from '../types';
+import { fetchVideoSearch, resolveVideo, submitSearch } from '../api/client';
+import type { HistoryEntry, ResolvedVideo } from '../types';
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
-  return { ...actual, submitSearch: vi.fn(), fetchVideoSearch: vi.fn(), fetchJobStatus: vi.fn() };
+  return {
+    ...actual,
+    submitSearch: vi.fn(),
+    fetchVideoSearch: vi.fn(),
+    fetchJobStatus: vi.fn(),
+    resolveVideo: vi.fn(),
+  };
 });
+
+const RESOLVED: ResolvedVideo = {
+  id: 'video-row-1',
+  video_id: 'abcdef12345',
+  title: 'Typing without looking down',
+  duration_seconds: 3600,
+  transcribed: false,
+};
 
 /**
  * Replaying a saved search, end to end.
@@ -54,6 +68,10 @@ vi.mock('../components/VideoPlayer', async () => {
       return createElement('div', { 'data-testid': 'video-player' });
     }),
   };
+});
+
+beforeEach(() => {
+  vi.mocked(resolveVideo).mockResolvedValue(RESOLVED);
 });
 
 const ENTRY: HistoryEntry = {
@@ -107,7 +125,7 @@ describe('replaying a saved search from history', () => {
     // The visitor arrived here *from* a search for this phrase, so the field
     // shows it. An empty field falls back to the "e.g. …" placeholder and reads
     // as though nothing had been searched for.
-    expect(await screen.findByLabelText('Word or phrase')).toHaveValue('how to type faster');
+    expect(await screen.findByLabelText('Search this video')).toHaveValue('how to type faster');
   });
 
   it('seeks the player to the second the keyword was found', async () => {
@@ -140,7 +158,7 @@ describe('replaying a saved search from history', () => {
     // And the form reads as a replay, not a search in flight: the video is
     // loaded, the phrase it was clicked for is there to re-run or edit, and
     // nothing is spinning.
-    expect(screen.getByLabelText('Word or phrase')).toHaveValue('how to type faster');
+    expect(screen.getByLabelText('Search this video')).toHaveValue('how to type faster');
     expect(screen.queryByText(/finding your moment|finding the moment/i)).toBeNull();
   });
 

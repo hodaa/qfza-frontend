@@ -8,7 +8,7 @@ export interface SearchMatch {
 }
 
 /** Response shape when results were found in cache. */
-export interface SearchFoundResponse {
+interface SearchFoundResponse {
   status: 'found';
   results: SearchMatch[];
   /** True when the video is transcribed but has no speech/sound at all. */
@@ -16,7 +16,7 @@ export interface SearchFoundResponse {
 }
 
 /** Response shape when the video is transcribed but the phrase has no matches. */
-export interface SearchNotFoundResponse {
+interface SearchNotFoundResponse {
   status: 'not_found';
   results: [];
   /** True when the video is transcribed but has no speech/sound at all. */
@@ -24,7 +24,7 @@ export interface SearchNotFoundResponse {
 }
 
 /** Response shape when a transcription job was created. */
-export interface SearchProcessingResponse {
+interface SearchProcessingResponse {
   status: 'processing';
   job_id: string;
   video_id: string;
@@ -35,7 +35,7 @@ export type SearchResponse =
   SearchFoundResponse | SearchNotFoundResponse | SearchProcessingResponse;
 
 /** Lifecycle states for a transcription job. */
-export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 /** Response shape for GET /api/status/{job_id}. */
 export interface StatusResponse {
@@ -52,6 +52,24 @@ export interface StatusResponse {
 /** Response shape for GET /api/video/{video_id}/search. */
 export type VideoSearchResponse = SearchFoundResponse | SearchNotFoundResponse;
 
+/** A video identified by a pasted link, before transcription is requested. */
+export interface ResolvedVideo {
+  /** Backend UUID, used by transcript and history routes. */
+  id: string;
+  /** Source id (YouTube video id or Drive file id), used by action routes. */
+  video_id: string;
+  title: string | null;
+  duration_seconds: number | null;
+  transcribed: boolean;
+}
+
+/** Response shape for POST /api/videos/{youtube_id}/prepare. */
+export interface PreparedVideo {
+  status: 'ready' | 'processing';
+  video_id: string;
+  job_id: string | null;
+}
+
 /** Response shape for GET /api/videos/{youtube_id}/formats. */
 export interface VideoFormatsResponse {
   /** Downloadable H.264 heights in pixels, tallest first. */
@@ -59,7 +77,7 @@ export interface VideoFormatsResponse {
 }
 
 /** Lifecycle states for an offloaded video download. */
-export type VideoDownloadState = 'pending' | 'processing' | 'ready' | 'failed' | 'consumed';
+type VideoDownloadState = 'pending' | 'processing' | 'ready' | 'failed' | 'consumed';
 
 /** Response shape for POST /api/videos/{youtube_id}/downloads. */
 export interface VideoDownloadCreated {
@@ -74,6 +92,25 @@ export interface VideoDownloadStatus extends VideoDownloadCreated {
   /** User-safe failure message when failed. */
   error: string | null;
   /** Filename the client should save the file under. */
+  filename: string | null;
+}
+
+/** Lifecycle states for an AI lecture-notes request. */
+type VideoNotesState = 'pending' | 'processing' | 'ready' | 'failed';
+
+/** Response shape for POST /api/videos/{youtube_id}/notes. */
+export interface VideoNotesCreated {
+  id: string;
+  status: VideoNotesState;
+}
+
+/** Response shape for the lecture-notes status route. */
+export interface VideoNotesStatus extends VideoNotesCreated {
+  /** Blob URL of the generated PDF; set only while ready. */
+  url: string | null;
+  /** User-safe failure message when failed. */
+  error: string | null;
+  /** Filename the client should save the PDF under. */
   filename: string | null;
 }
 

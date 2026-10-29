@@ -4,7 +4,7 @@ import { formatYouTubeTime } from '../utils/youtube';
 import { Trans, useTranslation } from 'react-i18next';
 import { ErrorView } from './ErrorView';
 import { IconPlay, IconTarget } from './icons';
-import { ResultsList } from './ResultsList';
+import { MatchCountBadge, ResultsList } from './ResultsList';
 import { ResultsToolbar } from './ResultsToolbar';
 import { transcriptPdfUrl } from '../api/client';
 import { StatusCard } from './StatusCard';
@@ -25,6 +25,12 @@ interface Props {
   /** The video under search once the URL resolved to one, whichever source it is. */
   video: VideoRef | null;
   matchLimit?: number;
+  /** Render the player inside the card; false when the workspace owns it. */
+  showPlayer?: boolean;
+  /** Render the download/notes toolbar inside the card; false in the workspace. */
+  showToolbar?: boolean;
+  /** Render the illustrative result rows in the idle card; false to omit them. */
+  showMockup?: boolean;
   playerRef: React.Ref<VideoPlayerHandle>;
   onSeek: (seconds: number) => void;
   onPlaybackChange?: (seconds: number | null) => void;
@@ -71,27 +77,32 @@ const MOCK_ROWS = [
 ];
 
 /**
- * Static mock preview of a result list (player frame + timestamped rows), shown
- * only in the idle phase: the panel explains and previews its own purpose
- * instead of rendering a bare empty box. It stays low-contrast and unscaled so
- * the form keeps the loudest voice before a search runs.
+ * Static mock preview of a result list (timestamped rows, optionally a player
+ * frame), shown only in the idle phase: the panel explains and previews its own
+ * purpose instead of rendering a bare empty box. The workspace already has a
+ * real player, so there the frame is omitted and only the rows remain. It stays
+ * low-contrast and unscaled so the form keeps the loudest voice before a search.
  *
- * Purely decorative, so it is `aria-hidden` — the real copy below carries the
+ * Purely decorative, so it is `aria-hidden` — the real copy above carries the
  * message, and a visible "illustrative preview" caption stops anyone from
  * reading the fake rows as results.
  */
-function IdleMockup() {
+function IdleMockup({ showPlayerFrame = true }: { showPlayerFrame?: boolean }) {
   return (
     <div aria-hidden="true" className="mx-auto w-full max-w-[17rem] select-none">
-      <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-gradient-to-br from-slate-100 to-slate-200/70">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/85 text-slate-400 shadow-sm">
-          <IconPlay size={22} />
-        </span>
-        <span className="absolute end-2 bottom-2 rounded bg-white/85 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-slate-500 tabular-nums">
-          04:12
-        </span>
-      </div>
-      <ul className="mt-2.5 flex flex-col gap-2">
+      {showPlayerFrame ? (
+        <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-gradient-to-br from-slate-100 to-slate-200/70">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/85 text-slate-400 shadow-sm">
+            <IconPlay size={22} />
+          </span>
+          <span className="absolute end-2 bottom-2 rounded bg-white/85 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-slate-500 tabular-nums">
+            04:12
+          </span>
+        </div>
+      ) : null}
+      <ul
+        className={`${showPlayerFrame ? 'mt-2.5' : ''} flex flex-col gap-2`}
+      >
         {MOCK_ROWS.map((row) => (
           <li
             key={row.time}
@@ -126,6 +137,9 @@ function ResultsPanelContent({
   keyword,
   video,
   matchLimit,
+  showPlayer = true,
+  showToolbar = true,
+  showMockup = true,
   playerRef,
   onSeek,
   onPlaybackChange,
@@ -151,13 +165,13 @@ function ResultsPanelContent({
   if (phase === 'idle') {
     return (
       <section
-        className={`${CARD_IDLE} flex min-h-[300px] flex-col items-center justify-center gap-6`}
+        className={`${CARD_IDLE} flex min-h-[300px] flex-col items-center justify-center gap-5`}
         aria-label={t('results.idleTitle')}
       >
         <div className="flex flex-col items-center gap-2.5 text-center">
           <span
             aria-hidden="true"
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent/15 to-primary/10 text-accent"
+            className="hidden h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent/15 to-primary/10 text-accent xl:flex"
           >
             <IconTarget size={26} />
           </span>
@@ -165,13 +179,16 @@ function ResultsPanelContent({
           <p className="-mt-1 max-w-md text-sm text-muted">{t('results.idle')}</p>
         </div>
         {/* The mock is a dimmed, disabled preview so it can never be mistaken
-            for a live, interactive result list. */}
-        <div className="flex w-full flex-col items-center gap-2.5 opacity-80">
-          <IdleMockup />
-          <p className="m-0 text-[11px] font-semibold tracking-wide text-muted-strong">
-            {t('results.idleMockLabel')}
-          </p>
-        </div>
+            for a live, interactive result list. Beside the workspace's real
+            player it keeps the rows but drops the faux player frame. */}
+        {showMockup ? (
+          <div className="flex w-full flex-col items-center gap-2 opacity-80">
+            <IdleMockup showPlayerFrame={showPlayer} />
+            <p className="m-0 text-[11px] font-semibold tracking-wide text-muted-strong">
+              {t('results.idleMockLabel')}
+            </p>
+          </div>
+        ) : null}
       </section>
     );
   }
@@ -191,31 +208,34 @@ function ResultsPanelContent({
     return (
       <section className={`${CARD_ACTIVE} animate-fade-in`} aria-labelledby={headingId}>
         <div className="mb-5 flex min-w-0 flex-col gap-3">
-          <h2
-            id={headingId}
-            ref={headingRef}
-            tabIndex={-1}
-            className="w-full min-w-0 text-lg font-bold text-brand focus:outline-none rtl:text-right [overflow-wrap:anywhere]"
-            dir="auto"
-          >
-            {(sharedKeyword ?? keyword) ? (
-              <Trans
-                i18nKey="results.title"
-                values={{ keyword: sharedKeyword ?? keyword }}
-                components={{
-                  keyword: <bdi className="results-keyword" dir="auto" />,
-                }}
-              />
-            ) : (
-              // A `?v=…&t=0&empty=1` link knows the search found nothing but not
-              // what it searched for: the keyword is deliberately kept out of the
-              // URL, so it is not there to name. "Matches for "" " would be
-              // worse than saying what is actually true.
-              t('results.noKeywordTitle')
-            )}
-          </h2>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h2
+              id={headingId}
+              ref={headingRef}
+              tabIndex={-1}
+              className="min-w-0 flex-1 text-lg font-bold text-brand focus:outline-none rtl:text-right [overflow-wrap:anywhere]"
+              dir="auto"
+            >
+              {(sharedKeyword ?? keyword) ? (
+                <Trans
+                  i18nKey="results.title"
+                  values={{ keyword: sharedKeyword ?? keyword }}
+                  components={{
+                    keyword: <bdi className="results-keyword" dir="auto" />,
+                  }}
+                />
+              ) : (
+                // A `?v=…&t=0&empty=1` link knows the search found nothing but not
+                // what it searched for: the keyword is deliberately kept out of the
+                // URL, so it is not there to name. "Matches for "" " would be
+                // worse than saying what is actually true.
+                t('results.noKeywordTitle')
+              )}
+            </h2>
+            <MatchCountBadge count={0} />
+          </div>
         </div>
-        {video ? (
+        {showPlayer && video ? (
           <VideoPlayer ref={playerRef} video={video} onPlaybackChange={onPlaybackChange} />
         ) : null}
         <div className="mt-5">
@@ -227,6 +247,7 @@ function ResultsPanelContent({
             onClear={onClear}
             matchLimit={matchLimit}
             currentPlayingTimestamp={currentPlayingTimestamp}
+            showCount={false}
             video={video}
           />
         </div>
@@ -256,25 +277,28 @@ function ResultsPanelContent({
     return (
       <section className={`${CARD_ACTIVE} animate-fade-in`} aria-labelledby={headingId}>
         <div className="mb-5 flex min-w-0 flex-col gap-3">
-          <h2
-            id={headingId}
-            ref={headingRef}
-            tabIndex={-1}
-            className="w-full min-w-0 text-lg font-bold text-brand focus:outline-none rtl:text-right [overflow-wrap:anywhere]"
-            dir="auto"
-          >
-            {sharedKeyword ? (
-              <Trans
-                i18nKey="results.title"
-                values={{ keyword: sharedKeyword }}
-                components={{
-                  keyword: <bdi className="results-keyword" dir="auto" />,
-                }}
-              />
-            ) : (
-              t('shared.title', { timestamp: momentTimestamp })
-            )}
-          </h2>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h2
+              id={headingId}
+              ref={headingRef}
+              tabIndex={-1}
+              className="min-w-0 flex-1 text-lg font-bold text-brand focus:outline-none rtl:text-right [overflow-wrap:anywhere]"
+              dir="auto"
+            >
+              {sharedKeyword ? (
+                <Trans
+                  i18nKey="results.title"
+                  values={{ keyword: sharedKeyword }}
+                  components={{
+                    keyword: <bdi className="results-keyword" dir="auto" />,
+                  }}
+                />
+              ) : (
+                t('shared.title', { timestamp: momentTimestamp })
+              )}
+            </h2>
+            <MatchCountBadge count={rows.length} />
+          </div>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent-strong">
               <IconTarget size={14} />
@@ -283,7 +307,7 @@ function ResultsPanelContent({
             <p className="text-sm text-muted rtl:text-right">{t('shared.hint')}</p>
           </div>
         </div>
-        {video ? (
+        {showPlayer && video ? (
           <VideoPlayer ref={playerRef} video={video} onPlaybackChange={onPlaybackChange} />
         ) : null}
         <div className="mt-5">
@@ -306,6 +330,7 @@ function ResultsPanelContent({
             // The player is parked on the saved moment, so that row is the active
             // one — the same row, and the same accent ring, the search view marks.
             currentPlayingTimestamp={sharedSeconds}
+            showCount={false}
             video={video}
           />
         </div>
@@ -317,27 +342,34 @@ function ResultsPanelContent({
     return (
       <section className={`${CARD_ACTIVE} animate-fade-in`} aria-labelledby={headingId}>
         <div className="mb-5 flex min-w-0 flex-col gap-3">
-          <h2
-            id={headingId}
-            ref={headingRef}
-            tabIndex={-1}
-            className="w-full min-w-0 text-lg font-bold text-brand focus:outline-none rtl:text-right [overflow-wrap:anywhere]"
-            dir="auto"
-          >
-            <Trans
-              i18nKey="results.title"
-              values={{ keyword }}
-              components={{
-                keyword: <bdi className="results-keyword" dir="auto" />,
-              }}
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h2
+              id={headingId}
+              ref={headingRef}
+              tabIndex={-1}
+              className="min-w-0 flex-1 text-lg font-bold text-brand focus:outline-none rtl:text-right [overflow-wrap:anywhere]"
+              dir="auto"
+            >
+              <Trans
+                i18nKey="results.title"
+                values={{ keyword }}
+                components={{
+                  keyword: <bdi className="results-keyword" dir="auto" />,
+                }}
+              />
+            </h2>
+            <MatchCountBadge count={matches.length} />
+          </div>
+          {showToolbar ? (
+            <ResultsToolbar
+              transcriptUrl={video ? transcriptPdfUrl(video.id) : undefined}
+              videoId={video?.id}
+              showQuality={video?.source === 'youtube'}
+              allowNotes={!noSpeech}
             />
-          </h2>
-          <ResultsToolbar
-            transcriptUrl={video ? transcriptPdfUrl(video.id) : undefined}
-            videoYoutubeId={video?.source === 'youtube' ? video.id : undefined}
-          />
+          ) : null}
         </div>
-        {video ? (
+        {showPlayer && video ? (
           <VideoPlayer ref={playerRef} video={video} onPlaybackChange={onPlaybackChange} />
         ) : null}
         <div className="mt-5">
@@ -349,6 +381,7 @@ function ResultsPanelContent({
             onClear={onClear}
             matchLimit={matchLimit}
             currentPlayingTimestamp={currentPlayingTimestamp}
+            showCount={false}
             video={video}
           />
         </div>

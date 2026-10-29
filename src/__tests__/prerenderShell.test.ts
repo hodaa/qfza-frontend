@@ -97,7 +97,7 @@ describe('prerender shell in the built homepage', () => {
   it.runIf(built)('keeps the crawlable text in the HTML that ships', () => {
     // Deleting the shell is the cheap way to remove a flash, and it is the one
     // way to break the homepage for search engines without any test noticing.
-    expect(html).toContain('Search Inside YouTube Videos');
+    expect(html).toContain('Search Inside Videos');
     expect(html).toMatch(/<h1[\s>]/);
     expect(html).toContain('href="/blog/"');
     expect(html).toContain('href="/ar/blog/"');

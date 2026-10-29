@@ -6,7 +6,6 @@ import { ContactForm } from '../components/ContactForm';
 vi.mock('../config', () => ({
   CONTACT_FORM_ENDPOINT: 'https://formspree.io/f/test',
   CONTACT_EMAIL: 'test@example.com',
-  CONTACT_EMAIL_CONFIGURED: true,
 }));
 
 describe('ContactForm', () => {

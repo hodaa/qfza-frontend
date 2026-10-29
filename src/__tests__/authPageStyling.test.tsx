@@ -16,7 +16,6 @@ vi.mock('../config', () => ({
   CSRF_TOKEN: '',
   CSRF_HEADER_NAME: 'X-CSRF-Token',
   CONTACT_EMAIL: 'support@qfza.app',
-  CONTACT_EMAIL_CONFIGURED: true,
   CONTACT_FORM_ENDPOINT: 'https://form.example/submit',
   GOOGLE_CLIENT_ID: '',
 }));

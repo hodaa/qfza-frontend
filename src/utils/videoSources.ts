@@ -15,7 +15,7 @@ import type { YouTubeUrlIssue } from './youtube';
 export type VideoUrlIssue = YouTubeUrlIssue;
 
 /** The video sources the app can search. */
-export type VideoSource = 'youtube' | 'drive';
+type VideoSource = 'youtube' | 'drive';
 
 /** A video's identity: which source owns it, and its id within that source. */
 export interface VideoRef {
@@ -57,7 +57,7 @@ export function isGoogleDriveId(value: string): boolean {
  * `uc?id=` download form, mirroring the backend. A folder has no video in it,
  * so it is rejected outright rather than reported as an empty video.
  */
-export function readDriveVideo(parsed: URL): ParsedVideo | null {
+function readDriveVideo(parsed: URL): ParsedVideo | null {
   if (parsed.hostname !== 'drive.google.com') return null;
   if (DRIVE_FOLDER_PATH.test(parsed.pathname)) return { id: null, issue: 'invalid' };
   const id = DRIVE_FILE_PATH.exec(parsed.pathname)?.[1] ?? parsed.searchParams.get('id') ?? '';
@@ -85,6 +85,33 @@ const driveAdapter: VideoSourceAdapter = {
   // seconds a moment link carries are dropped for this source.
   watchUrl: (id) => `https://drive.google.com/file/d/${encodeURIComponent(id)}/view`,
 };
+
+const DRIVE_STREAM_BASE_URL =
+  (import.meta as ImportMeta).env?.VITE_DRIVE_STREAM_BASE_URL?.replace(/\/$/, '') ||
+  'https://www.googleapis.com/drive/v3/files';
+
+/**
+ * Media URL for a public Drive file.
+ *
+ * Drive's preview iframe has no seek API, and its browser-download endpoint
+ * rejects media requests (its Sec-Fetch response varies), so the in-app player
+ * uses the Drive API's `alt=media` endpoint instead. It serves the bytes with
+ * Range support, which is what makes `currentTime` seeking work.
+ *
+ * The API key is a public, referrer-restricted key: it is necessarily visible
+ * in the bundle. Restrict it to this site and the Drive API in Google Cloud.
+ */
+export function buildDriveStreamUrl(
+  id: string,
+  key: string | undefined = (import.meta as ImportMeta).env?.VITE_GOOGLE_DRIVE_API_KEY,
+): string {
+  const url = `${DRIVE_STREAM_BASE_URL}/${encodeURIComponent(id)}?alt=media`;
+  return key ? `${url}&key=${encodeURIComponent(key)}` : url;
+}
+
+export function buildDrivePreviewUrl(id: string): string {
+  return `https://drive.google.com/file/d/${encodeURIComponent(id)}/preview`;
+}
 
 /** Adapter order is the claim order; every adapter's read must decline other hosts. */
 const ADAPTERS: readonly VideoSourceAdapter[] = [youtubeAdapter, driveAdapter];

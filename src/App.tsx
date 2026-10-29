@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, submitSearch } from './api/client';
+import { ApiError, resolveVideo, submitSearch } from './api/client';
 import { Features } from './components/Features';
 import { Hero } from './components/Hero';
 import { HowItWorks } from './components/HowItWorks';
+import { KeywordSearchForm } from './components/KeywordSearchForm';
+import type { KeywordSearchFormHandle } from './components/KeywordSearchForm';
 import { ResultsPanel } from './components/ResultsPanel';
 import type { Phase } from './components/ResultsPanel';
-import { SearchForm } from './components/SearchForm';
-import type { SearchFormHandle } from './components/SearchForm';
 import { SiteFooter } from './components/SiteFooter';
 import { SiteHeader } from './components/SiteHeader';
+import { VideoStage } from './components/VideoStage';
+import { VideoUrlForm } from './components/VideoUrlForm';
 import { ContactPage } from './components/ContactPage';
 import { NotFoundPage } from './components/NotFoundPage';
 import { HistoryPage } from './components/auth/HistoryPage';
@@ -22,7 +24,7 @@ import { navigate, useRoute } from './hooks/useRoute';
 import { useDocumentMeta } from './hooks/useDocumentMeta';
 import { useJobPolling } from './hooks/useJobPolling';
 import type { VideoPlayerHandle } from './hooks/useYouTubePlayer';
-import type { HistoryEntry, SearchMatch, StatusResponse } from './types';
+import type { HistoryEntry, ResolvedVideo, SearchMatch, StatusResponse } from './types';
 import { savedResultsOf } from './utils/savedResults';
 import { isReadingHelp } from './utils/focus';
 import {
@@ -34,6 +36,7 @@ import {
 } from './utils/videoSources';
 import type { DeepLink, VideoRef } from './utils/videoSources';
 import { clearResultsCache, getCachedResults, setCachedResults } from './utils/resultsCache';
+import { ensureTranscript as ensureVideoTranscript } from './utils/transcript';
 import { useAuth } from './auth/useAuth';
 import { trackEvent } from './utils/analytics';
 
@@ -66,7 +69,7 @@ function readSharedLink(): DeepLink | null {
   }
 }
 
-/** قفزة app: two-column split — search on the left, results on the right. */
+/** قفزة app: URL-first video workspace with search beside the player. */
 export default function App() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -97,21 +100,17 @@ export default function App() {
     const link = readSharedLink();
     return link ? { url: buildWatchUrl(link.video, 0), keyword: '' } : { url: '', keyword: '' };
   });
-  // Latches true once the user edits either field after a completed search, so
-  // the submit CTA can warn that the shown results are stale. Stored as a
-  // boolean (not the live values) so typing doesn't re-render the whole tree
-  // on every keystroke.
-  const [editedSinceSubmit, setEditedSinceSubmit] = useState(false);
+  const [resolved, setResolved] = useState<ResolvedVideo | null>(null);
+  const [loadingVideo, setLoadingVideo] = useState(() => readSharedLink() !== null);
+  const [loadError, setLoadError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [transcriptReady, setTranscriptReady] = useState(false);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
+  const videoColumnRef = useRef<HTMLElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const startedAtRef = useRef<number | null>(null);
   const estimatedWaitRef = useRef<number | null>(null);
-  const formRef = useRef<SearchFormHandle>(null);
-  // SearchForm seeds its inputs from `initialUrl`/`initialKeyword` on mount and
-  // then owns them, so changing those props afterwards cannot reach the fields.
-  // Bumping this remounts the form, which is how App asks for the inputs to be
-  // replaced — after a sign-out, or when a replay loads a different video.
-  const [formGeneration, setFormGeneration] = useState(0);
+  const keywordFormRef = useRef<KeywordSearchFormHandle>(null);
   const searchControllerRef = useRef<AbortController | null>(null);
   const [currentPlayingTimestamp, setCurrentPlayingTimestamp] = useState<number | null>(null);
   const transitionTimerRef = useRef<number | null>(null);
@@ -154,6 +153,17 @@ export default function App() {
   const handleSeek = useCallback(
     (seconds: number) => {
       playerRef.current?.seekTo(seconds, sharedSeconds === null ? undefined : { autoplay: false });
+      // On narrow screens the player sits above the results, so a tapped moment
+      // would otherwise play off-screen. Desktop keeps the player in view.
+      const narrow =
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(max-width: 1023px)').matches;
+      if (!narrow) return;
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      videoColumnRef.current?.scrollIntoView?.({
+        behavior: reducedMotion ? 'instant' : 'smooth',
+        block: 'start',
+      });
     },
     [sharedSeconds],
   );
@@ -185,6 +195,34 @@ export default function App() {
     playerRef.current?.seekTo(sharedSeconds, { autoplay: false });
   }, [route, phase, sharedSeconds]);
 
+  // One video object per URL: the player and the result list memoize on its
+  // identity, and a fresh object on every render would defeat that — and would
+  // read as a different video to the list's expanded state, collapsing it.
+  const video = useMemo(() => inspectVideoUrl(query.url).video, [query.url]);
+
+  // Resolving a link creates the video row without transcribing it, so the
+  // player and MP4 download are usable immediately. Transcript-dependent
+  // actions queue the job lazily through prepare/ensureTranscript.
+  useEffect(() => {
+    if (!video) {
+      return undefined;
+    }
+    const controller = new AbortController();
+    void resolveVideo(query.url, controller.signal)
+      .then((value) => {
+        if (controller.signal.aborted) return;
+        setResolved(value);
+        setTranscriptReady(value.transcribed);
+        setLoadingVideo(false);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setLoadError(error instanceof ApiError ? error.messageKey : 'workspace.loadFailed');
+        setLoadingVideo(false);
+      });
+    return () => controller.abort();
+  }, [query.url, video, loadAttempt]);
+
   // Put the search view back to how it looks before anyone typed anything.
   //
   // Signing out ends the session, but it does not un-type: the video URL, the
@@ -203,19 +241,29 @@ export default function App() {
     setEstimatedWait(null);
     setErrorText('');
     setCurrentPlayingTimestamp(null);
-    setEditedSinceSubmit(false);
     setSharedSeconds(null);
     setSharedKeyword(null);
     setSharedMatches(null);
     setSharedMatched(true);
     setQuery({ url: '', keyword: '' });
+    keywordFormRef.current?.setKeyword('');
+    setResolved(null);
+    setLoadingVideo(false);
+    setLoadError('');
+    setTranscriptReady(false);
     setPhase('idle');
     clearResultsCache();
-    setFormGeneration((generation) => generation + 1);
     if (window.location.search) {
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`);
     }
   }, [clearPendingTransition]);
+
+  const handleLogoClick = useCallback(() => {
+    resetSearchView();
+    if (typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
+  }, [resetSearchView]);
 
   // Watch the session rather than the button: both logout controls (the account
   // menu and the profile page) already navigate home, and a session that lapses
@@ -238,10 +286,10 @@ export default function App() {
   // together, so the effect above performs the seek.
   const showSavedSearch = useCallback(
     ({
-      video,
+      video: savedVideo,
       seconds,
       keyword,
-      matches,
+      matches: savedMatches,
       matched,
     }: {
       video: VideoRef;
@@ -260,25 +308,29 @@ export default function App() {
       setEstimatedWait(null);
       setErrorText('');
       setCurrentPlayingTimestamp(null);
-      setEditedSinceSubmit(false);
+      setResolved(null);
+      setTranscriptReady(false);
+      setLoadingVideo(true);
+      setLoadError('');
+      setLoadAttempt((attempt) => attempt + 1);
       // Carry the phrase into the field: the visitor came here *from* a search for
       // it, so the input should show what they searched rather than fall back to
       // the placeholder and read as if nothing was searched for.
-      setQuery({ url: buildWatchUrl(video, 0), keyword: trimmedKeyword });
+      setQuery({ url: buildWatchUrl(savedVideo, 0), keyword: trimmedKeyword });
+      keywordFormRef.current?.setKeyword(trimmedKeyword);
 
       // Go home first, then write the moment into the URL: the route has already
       // changed by the time replaceState lands, and the address stays a deep link
       // a reload can replay. The search view only lives on the home route, so
       // without this the player would be mounted under /history and never appear.
       navigate('home');
-      window.history.replaceState(null, '', buildMomentHref(video, seconds));
+      window.history.replaceState(null, '', buildMomentHref(savedVideo, seconds));
 
       setSharedSeconds(Math.max(0, Math.floor(seconds)));
       setSharedKeyword(trimmedKeyword || null);
-      setSharedMatches(matches);
+      setSharedMatches(savedMatches);
       setSharedMatched(matched);
       setPhase('done');
-      setFormGeneration((generation) => generation + 1);
     },
     [],
   );
@@ -322,8 +374,48 @@ export default function App() {
     [showSavedSearch],
   );
 
-  const handleSubmit = useCallback(
-    async (url: string, keyword: string) => {
+  const handleLoad = useCallback(
+    (url: string) => {
+      const info = inspectVideoUrl(url);
+      if (!info.video) {
+        setLoadError(`error.${info.issue}`);
+        return;
+      }
+      searchControllerRef.current?.abort();
+      searchControllerRef.current = null;
+      clearPendingTransition();
+      setJob(null);
+      setMatches([]);
+      setNoSpeech(false);
+      setProgress(null);
+      setEstimatedWait(null);
+      setErrorText('');
+      setCurrentPlayingTimestamp(null);
+      setSharedSeconds(null);
+      setSharedKeyword(null);
+      setSharedMatches(null);
+      setSharedMatched(true);
+      setPhase('idle');
+      setQuery({ url, keyword: '' });
+      keywordFormRef.current?.setKeyword('');
+      setResolved(null);
+      setTranscriptReady(false);
+      setLoadError('');
+      setLoadingVideo(true);
+      setLoadAttempt((attempt) => attempt + 1);
+      clearResultsCache();
+      if (window.location.search) {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`);
+      }
+    },
+    [clearPendingTransition],
+  );
+
+  const handleSearch = useCallback(
+    async (keyword: string) => {
+      if (!video || !resolved) {
+        return;
+      }
       // A signal identifies the whole search, including its polling lifecycle.
       // Even a transport that resolves after abort cannot publish stale results.
       searchControllerRef.current?.abort();
@@ -334,15 +426,13 @@ export default function App() {
       setSharedKeyword(null);
       setSharedMatches(null);
       setSharedMatched(true);
-      const video = inspectVideoUrl(url).video;
-      const cached = video ? getCachedResults(video, keyword) : undefined;
+      const cached = getCachedResults(video, keyword);
       if (cached !== undefined) {
         // Same video + keyword was already searched this session: show the
         // cached results immediately instead of re-submitting and re-polling.
         trackEvent('search_submit', { source: 'cache' });
         startedAtRef.current = Date.now();
-        setQuery({ url, keyword });
-        setEditedSinceSubmit(false);
+        setQuery({ url: query.url, keyword });
         setErrorText('');
         setJob(null);
         setMatches(cached.matches);
@@ -350,12 +440,12 @@ export default function App() {
         setCurrentPlayingTimestamp(null);
         clearPendingTransition();
         setProgress(100);
+        setTranscriptReady(true);
         setPhase('done');
         return;
       }
       startedAtRef.current = Date.now();
-      setQuery({ url, keyword });
-      setEditedSinceSubmit(false);
+      setQuery({ url: query.url, keyword });
       setErrorText('');
       setJob(null);
       setMatches([]);
@@ -368,15 +458,15 @@ export default function App() {
       setProgress(PROGRESS_INITIAL);
       setPhase('processing');
       try {
-        const response = await submitSearch(url, keyword, controller.signal);
+        const response = await submitSearch(query.url, keyword, controller.signal);
         if (controller.signal.aborted) return;
         trackEvent('search_submit', { source: 'network' });
         if (response.status === 'found' || response.status === 'not_found') {
-          if (video)
-            setCachedResults(video, keyword, response.results, response.no_speech ?? false);
+          setCachedResults(video, keyword, response.results, response.no_speech ?? false);
           setMatches(response.results);
           setNoSpeech(response.no_speech ?? false);
           setProgress(100);
+          setTranscriptReady(true);
           setPhase('done');
           return;
         }
@@ -393,7 +483,7 @@ export default function App() {
         setPhase('error');
       }
     },
-    [t, clearPendingTransition],
+    [t, clearPendingTransition, query.url, resolved, video],
   );
 
   const handlePollProgress = useCallback((status: StatusResponse) => {
@@ -426,10 +516,10 @@ export default function App() {
 
   const handlePollSuccess = useCallback(
     (value: SearchMatch[], noSpeech: boolean) => {
-      const video = inspectVideoUrl(query.url).video;
       if (video) setCachedResults(video, query.keyword, value, noSpeech);
       setNoSpeech(noSpeech);
       setProgress(100);
+      setTranscriptReady(true);
       clearPendingTransition();
       const signal = searchControllerRef.current?.signal;
       transitionTimerRef.current = window.setTimeout(() => {
@@ -438,7 +528,7 @@ export default function App() {
         setPhase('done');
       }, PROGRESS_DONE_DELAY_MS);
     },
-    [query, clearPendingTransition],
+    [query.keyword, video, clearPendingTransition],
   );
   const handlePollError = useCallback(
     (message: string) => {
@@ -490,7 +580,6 @@ export default function App() {
   const resetSearch = useCallback(() => {
     searchControllerRef.current?.abort();
     clearPendingTransition();
-    setEditedSinceSubmit(false);
     setSharedSeconds(null);
     setSharedKeyword(null);
     setSharedMatches(null);
@@ -507,41 +596,48 @@ export default function App() {
   const handleClearKeyword = useCallback(() => {
     resetSearch();
     setQuery((current) => ({ ...current, keyword: '' }));
-    formRef.current?.focusKeyword(true);
+    keywordFormRef.current?.setKeyword('');
+    keywordFormRef.current?.focus();
   }, [resetSearch]);
 
   const handleCancelSearch = useCallback(() => {
     trackEvent('search_cancel');
     resetSearch();
-    formRef.current?.focusKeyword();
+    keywordFormRef.current?.focus();
   }, [resetSearch]);
 
   const handleRetry = useCallback(() => {
-    formRef.current?.submit();
-  }, []);
+    // Retry what is on screen, not what was submitted: the visitor may have
+    // corrected the phrase after the failure. An empty field goes back through
+    // the form's own validation so it focuses the input and explains the error.
+    const currentKeyword = keywordFormRef.current?.getKeyword().trim() ?? query.keyword;
+    if (!currentKeyword) {
+      keywordFormRef.current?.submit();
+      return;
+    }
+    if (video) {
+      void handleSearch(currentKeyword);
+      return;
+    }
+    keywordFormRef.current?.submit();
+  }, [handleSearch, query.keyword, video]);
 
-  const handleSearchInput = useCallback(() => {
-    setEditedSinceSubmit(true);
-  }, []);
+  const ensureTranscript = useCallback(
+    async (signal: AbortSignal) => {
+      if (!video) {
+        throw new Error('No video loaded');
+      }
+      if (transcriptReady) {
+        return;
+      }
+      await ensureVideoTranscript(video.id, signal);
+      setTranscriptReady(true);
+    },
+    [transcriptReady, video],
+  );
 
   const searching = phase === 'processing';
-  // One video object per URL: the player and the result list memoize on its
-  // identity, and a fresh object on every render would defeat that — and would
-  // read as a different video to the list's expanded state, collapsing it.
-  const video = useMemo(() => inspectVideoUrl(query.url).video, [query.url]);
-  // Once a search finishes, keep the Jump button latched off until the user
-  // actually changes the URL or phrase — clicking it again would only replay
-  // the exact same query. Retry (from an error panel) stays imperative, so it
-  // is unaffected by the latch.
-  const submitLocked = (phase === 'done' || phase === 'error') && !editedSinceSubmit;
-  // Layout is state-dependent. While idle the form is the hero: it takes the
-  // wider track and the placeholder preview sits in a narrower, de-emphasized
-  // "empty state" column beside it. Once processing/done we flip the emphasis
-  // and widen the results column so the output carries the weight.
-  const resultsActive = phase === 'processing' || phase === 'done' || phase === 'error';
-  const gridCols = resultsActive
-    ? 'lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]'
-    : 'lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.85fr)]';
+  const loadErrorText = loadError ? t(loadError) : undefined;
 
   // On the home view, honour a fragment anchor (the header's "How it works" /
   // "Why Qfza" links) once the sections are mounted.
@@ -571,7 +667,7 @@ export default function App() {
   // serves at the same URLs.
   if (route === 'not-found') {
     return (
-      <PageShell>
+      <PageShell onLogoClick={handleLogoClick}>
         <NotFoundPage />
       </PageShell>
     );
@@ -579,7 +675,7 @@ export default function App() {
 
   if (route === 'contact') {
     return (
-      <PageShell>
+      <PageShell onLogoClick={handleLogoClick}>
         <ContactPage />
       </PageShell>
     );
@@ -587,7 +683,7 @@ export default function App() {
 
   if (route === 'login') {
     return (
-      <PageShell>
+      <PageShell onLogoClick={handleLogoClick}>
         <LoginPage />
       </PageShell>
     );
@@ -595,7 +691,7 @@ export default function App() {
 
   if (route === 'register') {
     return (
-      <PageShell>
+      <PageShell onLogoClick={handleLogoClick}>
         <RegisterPage />
       </PageShell>
     );
@@ -603,7 +699,7 @@ export default function App() {
 
   if (route === 'reset-password') {
     return (
-      <PageShell>
+      <PageShell onLogoClick={handleLogoClick}>
         <ResetPasswordPage />
       </PageShell>
     );
@@ -611,7 +707,7 @@ export default function App() {
 
   if (route === 'verify-email') {
     return (
-      <PageShell>
+      <PageShell onLogoClick={handleLogoClick}>
         <VerifyEmailPage />
       </PageShell>
     );
@@ -619,7 +715,7 @@ export default function App() {
 
   if (route === 'history') {
     return (
-      <PageShell>
+      <PageShell onLogoClick={handleLogoClick}>
         <HistoryPage onReplay={replayHistoryEntry} onOpenVideo={openHistoryVideo} />
       </PageShell>
     );
@@ -627,7 +723,7 @@ export default function App() {
 
   if (route === 'profile') {
     return (
-      <PageShell>
+      <PageShell onLogoClick={handleLogoClick}>
         <ProfilePage />
       </PageShell>
     );
@@ -638,48 +734,94 @@ export default function App() {
       <a href="#main-content" className="skip-link">
         {t('actions.skipToContent')}
       </a>
-      <SiteHeader />
+      <SiteHeader onLogoClick={handleLogoClick} />
       <main id="main-content" tabIndex={-1} className="focus:outline-none">
-        <div className="mb-8 lg:mb-10">
-          <Hero compact />
-        </div>
-        <div className={`grid grid-cols-1 items-stretch gap-8 ${gridCols} lg:gap-10`}>
-          <section aria-labelledby="search-heading" className="min-w-0">
-            <SearchForm
-              key={formGeneration}
-              ref={formRef}
-              onSubmit={handleSubmit}
-              disabled={searching}
-              submitLocked={submitLocked}
-              onChange={handleSearchInput}
-              initialUrl={query.url}
-              initialKeyword={query.keyword}
-            />
-          </section>
-          <section ref={resultsRef} className="min-w-0 scroll-mt-6">
-            <ResultsPanel
-              phase={phase}
-              progress={progress}
-              matches={matches}
-              noSpeech={noSpeech}
-              errorText={errorText}
-              keyword={query.keyword}
-              video={video}
-              matchLimit={MATCH_LIMIT}
-              playerRef={playerRef}
-              onSeek={handleSeek}
-              onPlaybackChange={setCurrentPlayingTimestamp}
-              onClear={handleClearKeyword}
-              onRetry={handleRetry}
-              onCancel={searching ? handleCancelSearch : undefined}
-              currentPlayingTimestamp={currentPlayingTimestamp}
-              sharedSeconds={sharedSeconds}
-              sharedKeyword={sharedKeyword}
-              sharedMatches={sharedMatches}
-              sharedMatched={sharedMatched}
-            />
-          </section>
-        </div>
+        {video ? (
+          <>
+            <div className="mb-4">
+              <Hero compact />
+            </div>
+            <div className="mb-3">
+              <VideoUrlForm
+                key={query.url}
+                compact
+                onSubmit={handleLoad}
+                disabled={loadingVideo}
+                initialUrl={query.url}
+              />
+            </div>
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-x-8 lg:gap-y-0">
+              <div className="min-w-0 lg:col-start-2 lg:row-start-1 lg:mb-8">
+                <KeywordSearchForm
+                  ref={keywordFormRef}
+                  onSubmit={(keyword) => void handleSearch(keyword)}
+                  disabled={searching || loadingVideo || !resolved}
+                  disabledHint={
+                    searching ? undefined : t('workspace.searchAvailableAfterLoad')
+                  }
+                  initialKeyword={query.keyword}
+                />
+              </div>
+              <VideoStage
+                video={video}
+                resolved={resolved}
+                loading={loadingVideo}
+                loadError={loadErrorText}
+                allowNotes={!noSpeech}
+                transcriptReady={transcriptReady}
+                ensureTranscript={ensureTranscript}
+                playerRef={playerRef}
+                sectionRef={videoColumnRef}
+                onPlaybackChange={setCurrentPlayingTimestamp}
+              />
+              <div
+                ref={resultsRef}
+                className={`min-w-0 scroll-mt-6 lg:col-start-2 lg:row-start-2 ${
+                  phase === 'idle' ? 'lg:self-stretch' : ''
+                }`}
+              >
+                <ResultsPanel
+                  phase={phase}
+                  progress={progress}
+                  matches={matches}
+                  noSpeech={noSpeech}
+                  errorText={errorText}
+                  keyword={query.keyword}
+                  video={video}
+                  matchLimit={MATCH_LIMIT}
+                  showPlayer={false}
+                  showToolbar={false}
+                  showMockup
+                  playerRef={playerRef}
+                  onSeek={handleSeek}
+                  onPlaybackChange={setCurrentPlayingTimestamp}
+                  onClear={handleClearKeyword}
+                  onRetry={handleRetry}
+                  onCancel={searching ? handleCancelSearch : undefined}
+                  currentPlayingTimestamp={currentPlayingTimestamp}
+                  sharedSeconds={sharedSeconds}
+                  sharedKeyword={sharedKeyword}
+                  sharedMatches={sharedMatches}
+                  sharedMatched={sharedMatched}
+                />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mb-8 lg:mb-10">
+              <Hero />
+            </div>
+            <div className="mx-auto w-full max-w-4xl">
+              <VideoUrlForm
+                key={query.url}
+                onSubmit={handleLoad}
+                disabled={loadingVideo}
+                initialUrl={query.url}
+              />
+            </div>
+          </>
+        )}
         <HowItWorks />
         <Features />
       </main>
@@ -689,14 +831,20 @@ export default function App() {
 }
 
 /** Header + one panel + footer, shared by every non-search route. */
-function PageShell({ children }: { children: React.ReactNode }) {
+function PageShell({
+  children,
+  onLogoClick,
+}: {
+  children: React.ReactNode;
+  onLogoClick?: () => void;
+}) {
   const { t } = useTranslation();
   return (
     <div className="app">
       <a href="#main-content" className="skip-link">
         {t('actions.skipToContent')}
       </a>
-      <SiteHeader />
+      <SiteHeader onLogoClick={onLogoClick} />
       <main id="main-content" tabIndex={-1} className="focus:outline-none">
         {children}
       </main>

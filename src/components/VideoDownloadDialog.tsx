@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchVideoFormats } from '../api/client';
+import { IconChevronDown } from './icons';
 import { parseYouTubeTime } from '../utils/youtube';
 
 interface Props {
-  youtubeId: string;
+  videoId: string;
+  /** Only YouTube has selectable qualities; other sources hide the field. */
+  showQuality: boolean;
   /** Pre-fill and lock the start field, e.g. from the row's timestamp. */
   initialStart?: string;
   onClose: () => void;
@@ -47,11 +50,16 @@ function rangeIssue(start: number | null, end: number | null): string | null {
  * moment's download button arrives with its start pre-filled and locked, so
  * the clip always begins where the user clicked. The problem with the entered
  * range, if any, is only surfaced after a submit so half-typed times are not
- * scolded while they are being typed. The qualities come from the server,
- * which probes YouTube; until they arrive the picker offers the best
- * available stream.
+ * scolded while they are being typed. Qualities are only offered for YouTube,
+ * where the server can probe the stream ladder; the field is hidden for Drive.
  */
-export function VideoDownloadDialog({ youtubeId, initialStart, onClose, onDownload }: Props) {
+export function VideoDownloadDialog({
+  videoId,
+  showQuality,
+  initialStart,
+  onClose,
+  onDownload,
+}: Props) {
   const { t } = useTranslation();
   const startLocked = initialStart !== undefined;
   const [startValue, setStartValue] = useState(initialStart ?? '');
@@ -64,8 +72,11 @@ export function VideoDownloadDialog({ youtubeId, initialStart, onClose, onDownlo
   const issue = rangeIssue(start, end);
 
   useEffect(() => {
+    if (!showQuality) {
+      return;
+    }
     let cancelled = false;
-    fetchVideoFormats(youtubeId)
+    fetchVideoFormats(videoId)
       .then((next) => {
         if (!cancelled) setHeights(next);
       })
@@ -76,7 +87,7 @@ export function VideoDownloadDialog({ youtubeId, initialStart, onClose, onDownlo
     return () => {
       cancelled = true;
     };
-  }, [youtubeId]);
+  }, [videoId, showQuality]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -110,26 +121,36 @@ export function VideoDownloadDialog({ youtubeId, initialStart, onClose, onDownlo
           {t('results.downloadDialogTitle')}
         </h2>
         <form className="mt-4 flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            {t('results.quality')}
-            <select
-              className={FIELD}
-              value={height === null ? '' : String(height)}
-              disabled={heights === null || heights.length === 0}
-              onChange={(event) =>
-                setHeight(event.target.value === '' ? null : Number(event.target.value))
-              }
-            >
-              <option value="">
-                {heights === null ? t('results.qualityLoading') : t('results.qualityBest')}
-              </option>
-              {(heights ?? []).map((value) => (
-                <option key={value} value={value}>
-                  {value}p
-                </option>
-              ))}
-            </select>
-          </label>
+          {showQuality ? (
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              {t('results.quality')}
+              <div className="relative">
+                <select
+                  className={`${FIELD} peer appearance-none pe-10`}
+                  value={height === null ? '' : String(height)}
+                  disabled={heights === null || heights.length === 0}
+                  onChange={(event) =>
+                    setHeight(event.target.value === '' ? null : Number(event.target.value))
+                  }
+                >
+                  <option value="">
+                    {heights === null ? t('results.qualityLoading') : t('results.qualityBest')}
+                  </option>
+                  {(heights ?? []).map((value) => (
+                    <option key={value} value={value}>
+                      {value}p
+                    </option>
+                  ))}
+                </select>
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-slate-500 peer-disabled:text-slate-300"
+                >
+                  <IconChevronDown />
+                </span>
+              </div>
+            </label>
+          ) : null}
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             {t('results.segmentStart')}
             <input

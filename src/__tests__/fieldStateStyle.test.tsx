@@ -2,13 +2,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ContactForm } from '../components/ContactForm';
-import { SearchForm } from '../components/SearchForm';
+import { VideoUrlForm } from '../components/VideoUrlForm';
 import { fieldStateClass } from '../utils/fieldStyles';
 
 vi.mock('../config', () => ({
   CONTACT_FORM_ENDPOINT: 'https://formspree.io/f/test',
   CONTACT_EMAIL: 'test@example.com',
-  CONTACT_EMAIL_CONFIGURED: true,
   CSRF_TOKEN: '',
   CSRF_HEADER_NAME: 'X-CSRF-Token',
   GOOGLE_CLIENT_ID: '',
@@ -17,7 +16,7 @@ vi.mock('../config', () => ({
 /**
  * One invalid field looks the same wherever it is.
  *
- * The contact form and the search form are the same control behind different
+ * The contact form and the URL form are the same control behind different
  * labels, and a visitor who is told one of their fields is invalid should not
  * have to work out whether a red outline means "you made a mistake" in one form
  * and "nothing at all" in the other. The shared helper is what guarantees it, so
@@ -56,10 +55,10 @@ describe('shared invalid-field styling', () => {
     }
   });
 
-  it("marks the search form's first invalid field with that same class", async () => {
+  it("marks the URL form's first invalid field with that same class", async () => {
     const user = userEvent.setup();
-    render(<SearchForm onSubmit={vi.fn()} />);
-    await user.click(screen.getByRole('button', { name: 'Jump to the moment' }));
+    render(<VideoUrlForm onSubmit={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Jump to video' }));
 
     const field = await screen.findByLabelText(/video url/i);
     await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));

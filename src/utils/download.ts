@@ -1,10 +1,20 @@
-import { consumeVideoDownload, createVideoDownload, fetchVideoDownloadStatus } from '../api/client';
+import {
+  consumeVideoDownload,
+  createVideoDownload,
+  createVideoNotes,
+  fetchVideoDownloadStatus,
+  fetchVideoNotesStatus,
+} from '../api/client';
+import { sleep } from './async';
 
 // Give the browser a beat to start the save before the blob URL is released.
 const REVOKE_DELAY_MS = 1000;
 
 // How often the client asks the server whether the worker produced the file.
 const POLL_INTERVAL_MS = 2000;
+
+// Notes read the whole transcript, so they take longer than a download.
+const NOTES_POLL_INTERVAL_MS = 3000;
 
 // The download request's path: /api/videos/<id>/video.mp4 with an optional range.
 const VIDEO_PATH = /\/videos\/([^/]+)\/video\.mp4$/;
@@ -58,6 +68,53 @@ export async function saveDownload(url: string, signal?: AbortSignal): Promise<v
   }
   saveBlob(await response.blob(), ready.filename ?? downloadNameFor(url));
   await consumeAfterSave(target.youtubeId, created.id, signal);
+}
+
+/**
+ * Generate a lecture-notes PDF without leaving the page.
+ *
+ * The POST queues the work; the worker reads the transcript, then reports a
+ * cached blob URL. Ready notes are reused by the server, so a second click
+ * saves the same PDF instead of paying for another AI pass. With `regenerate`,
+ * the cached PDF is retired and a fresh one is generated. Aborting `signal`
+ * only stops this wait; the worker keeps the result for the next click.
+ */
+export async function saveNotes(
+  youtubeId: string,
+  signal?: AbortSignal,
+  regenerate = false,
+): Promise<void> {
+  const created = await createVideoNotes(youtubeId, signal, regenerate);
+  const ready = await waitForNotesReady(youtubeId, created.id, signal);
+  const response = await fetch(ready.url, { signal });
+  if (!response.ok) {
+    throw new Error(`Notes download failed with status ${response.status}`);
+  }
+  saveBlob(await response.blob(), ready.filename ?? notesNameFor(youtubeId));
+}
+
+/** Poll until the worker reported the notes ready, or they failed. */
+async function waitForNotesReady(
+  youtubeId: string,
+  noteId: string,
+  signal?: AbortSignal,
+): Promise<{ url: string; filename: string | null }> {
+  for (;;) {
+    const status = await fetchVideoNotesStatus(youtubeId, noteId, signal);
+    if (status.status === 'ready' && status.url) {
+      return { url: status.url, filename: status.filename };
+    }
+    if (status.status !== 'pending' && status.status !== 'processing') {
+      throw new Error(status.error ?? 'Lecture notes failed');
+    }
+    await sleep(NOTES_POLL_INTERVAL_MS, signal);
+  }
+}
+
+/** Rebuild the file name the server would use for a notes PDF. */
+export function notesNameFor(youtubeId: string): string {
+  const safeId = youtubeId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'video';
+  return `notes-${safeId}.pdf`;
 }
 
 /** Parse the video, section, and quality out of a download URL. */
@@ -118,24 +175,4 @@ function saveBlob(blob: Blob, name: string): void {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(objectUrl), REVOKE_DELAY_MS);
-}
-
-/** Wait for `ms`, rejecting with an AbortError if `signal` aborts first. */
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const onAbort = () => {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
-      reject(new DOMException('Aborted', 'AbortError'));
-    };
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    if (signal?.aborted) {
-      onAbort();
-      return;
-    }
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
 }

@@ -27,6 +27,18 @@ interface Props {
    * "Matching moments for “”" — so the caller names those rows itself.
    */
   listLabel?: string;
+  /** Render the count above the list; false when the caller places it in a heading. */
+  showCount?: boolean;
+}
+
+/** The match count, shared by the list header and the results heading row. */
+export function MatchCountBadge({ count }: { count: number }) {
+  const { t } = useTranslation();
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full bg-action/10 px-3 py-1 text-sm font-bold text-primary">
+      {t('results.matchCount', { count })}
+    </span>
+  );
 }
 
 /** Wrap every case-insensitive occurrence of the keyword in a highlight mark. */
@@ -77,6 +89,7 @@ const DOWNLOAD_SPINNER =
 interface SegmentDownloadButtonProps {
   videoId: string;
   timestamp: string;
+  showQuality: boolean;
 }
 
 /**
@@ -84,10 +97,10 @@ interface SegmentDownloadButtonProps {
  * dialog with the start time pre-filled; while the fetch runs the same button
  * turns into a cancel control, and clicking it stops waiting for the file.
  *
- * YouTube-only for now: the download pipeline still produces YouTube streams,
- * so a Drive row does not offer a button that could only fail.
+ * Only YouTube exposes a quality ladder; for other sources the quality field
+ * is hidden and the uploaded file is cut as-is.
  */
-function SegmentDownloadButton({ videoId, timestamp }: SegmentDownloadButtonProps) {
+function SegmentDownloadButton({ videoId, timestamp, showQuality }: SegmentDownloadButtonProps) {
   const { t } = useTranslation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const { preparing, beginDownload, cancelDownload } = usePreparingDownload(timestamp);
@@ -133,7 +146,8 @@ function SegmentDownloadButton({ videoId, timestamp }: SegmentDownloadButtonProp
       {dialogOpen ? (
         <VideoDownloadDialog
           key={`${videoId}-${timestamp}`}
-          youtubeId={videoId}
+          videoId={videoId}
+          showQuality={showQuality}
           initialStart={timestamp}
           onClose={() => setDialogOpen(false)}
           onDownload={handleDownload}
@@ -209,7 +223,7 @@ function ShareButton({ video, seconds, timestamp }: ShareButtonProps) {
  * re-render (and never re-run `highlightKeyword`) on an unrelated progress/ETA
  * poll.
  */
-export const MatchRow = memo(function MatchRow({
+const MatchRow = memo(function MatchRow({
   match,
   keyword,
   onSeek,
@@ -262,9 +276,11 @@ export const MatchRow = memo(function MatchRow({
         </button>
         {video ? (
           <div className="flex shrink-0 items-center gap-1.5 self-stretch p-2 max-sm:w-full max-sm:justify-end max-sm:border-t max-sm:border-slate-100 @min-[36rem]/matches:items-center @min-[36rem]/matches:border-s @min-[36rem]/matches:border-slate-100">
-            {video.source === 'youtube' ? (
-              <SegmentDownloadButton videoId={video.id} timestamp={timestamp} />
-            ) : null}
+            <SegmentDownloadButton
+              videoId={video.id}
+              timestamp={timestamp}
+              showQuality={video.source === 'youtube'}
+            />
             <ShareButton video={video} seconds={match.progress_seconds} timestamp={timestamp} />
             {video.source === 'youtube' ? (
               <a
@@ -295,6 +311,7 @@ export const ResultsList = memo(function ResultsList({
   matchLimit = DEFAULT_MATCH_LIMIT,
   currentPlayingTimestamp,
   listLabel,
+  showCount = true,
 }: Props) {
   const { t } = useTranslation();
   const listLabelText = listLabel ?? t('results.listLabel', { keyword });
@@ -338,12 +355,6 @@ export const ResultsList = memo(function ResultsList({
     });
   };
 
-  const countBadge = (
-    <span className="inline-flex items-center rounded-full bg-action/10 px-3 py-1 text-sm font-bold text-primary">
-      {t('results.matchCount', { count: matches.length })}
-    </span>
-  );
-
   if (matches.length === 0) {
     return (
       <section
@@ -364,7 +375,7 @@ export const ResultsList = memo(function ResultsList({
           </>
         ) : (
           <>
-            {countBadge}
+            {showCount ? <MatchCountBadge count={matches.length} /> : null}
             <span
               aria-hidden="true"
               className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500"
@@ -394,7 +405,7 @@ export const ResultsList = memo(function ResultsList({
     <section className="@container/matches" aria-label={listLabelText}>
       <div className="mb-3 flex flex-col gap-1">
         <div className="flex min-w-0 flex-wrap items-center gap-2 rtl:text-right">
-          {countBadge}
+          {showCount ? <MatchCountBadge count={matches.length} /> : null}
           {capped ? (
             <span className="text-sm font-normal text-muted">
               {t('results.showing', { shown: maxVisible, total: matches.length })}

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ResultsPanel } from '../components/ResultsPanel';
 import { fetchVideoFormats } from '../api/client';
-import { saveDownload } from '../utils/download';
+import { saveDownload, saveNotes } from '../utils/download';
 import type { SearchMatch } from '../types';
 
 // The dialog probes the server for qualities on open; those requests would
@@ -18,15 +18,18 @@ vi.mock('../api/client', async (importOriginal) => ({
 vi.mock('../utils/download', () => ({
   downloadNameFor: vi.fn(() => 'video.mp4'),
   saveDownload: vi.fn(),
+  saveNotes: vi.fn(),
 }));
 
 const formatsMock = vi.mocked(fetchVideoFormats);
 const saveDownloadMock = vi.mocked(saveDownload);
+const saveNotesMock = vi.mocked(saveNotes);
 
 beforeEach(() => {
   formatsMock.mockReset();
   formatsMock.mockResolvedValue([]);
   saveDownloadMock.mockReset();
+  saveNotesMock.mockReset();
 });
 
 const RESULTS: SearchMatch[] = [{ timestamp: '00:05', progress_seconds: 5, text_snippet: null }];
@@ -51,6 +54,29 @@ function holdSave() {
     aborted: () => aborted,
     finish: () => settle(),
     fail: (error: unknown = new Error('download failed')) => reject(error),
+  };
+}
+
+/** Control the mocked notes flow: finish it, fail it, or observe cancellation. */
+function holdNotes() {
+  let settle!: () => void;
+  let reject!: (error: unknown) => void;
+  let aborted = false;
+  const pending = new Promise<void>((resolve, failing) => {
+    settle = resolve;
+    reject = failing;
+  });
+  saveNotesMock.mockImplementation((_youtubeId, signal) => {
+    signal?.addEventListener('abort', () => {
+      aborted = true;
+      reject(new DOMException('Aborted', 'AbortError'));
+    });
+    return pending;
+  });
+  return {
+    aborted: () => aborted,
+    finish: () => settle(),
+    fail: (error: unknown = new Error('notes failed')) => reject(error),
   };
 }
 
@@ -97,9 +123,25 @@ describe('ResultsPanel', () => {
     expect(mock).toBeInTheDocument();
   });
 
+  it('keeps the illustrative rows but drops the faux player when the workspace owns the player', () => {
+    const { container } = render(
+      <ResultsPanel {...baseProps} phase="idle" showPlayer={false} />,
+    );
+
+    expect(screen.getByText('Ready to find your moment')).toBeInTheDocument();
+    expect(container.querySelector('.aspect-video')).not.toBeInTheDocument();
+    expect(container.querySelectorAll('li')).toHaveLength(3);
+    expect(screen.getAllByText('04:12')).toHaveLength(1);
+    expect(screen.getByText('Illustrative preview of what a search returns')).toBeInTheDocument();
+  });
+
   it('renders matches when done', () => {
     render(<ResultsPanel {...baseProps} phase="done" />);
     expect(screen.getByText('00:05')).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: /Matches for/ });
+    const count = screen.getByText('1 match');
+    expect(heading.parentElement).toContainElement(count);
+    expect(screen.getAllByText('1 match')).toHaveLength(1);
     const watch = screen.getByRole('link', {
       name: 'Watch on YouTube at 00:05 (opens in a new tab)',
     });
@@ -136,10 +178,95 @@ describe('ResultsPanel', () => {
     expect(saveDownloadMock).not.toHaveBeenCalled();
   });
 
+  it('offers the video itself as an MP4 download for a Drive video', async () => {
+    const user = userEvent.setup();
+    holdSave();
+    render(
+      <ResultsPanel {...baseProps} phase="done" video={{ source: 'drive', id: 'drivefile123' }} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Download video (MP4)' }));
+    expect(screen.queryByLabelText('Quality')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Download' }));
+
+    const url = String(saveDownloadMock.mock.calls[0]?.[0]);
+    expect(url.slice(url.indexOf('/api'))).toBe('/api/videos/drivefile123/video.mp4');
+  });
+
   it('omits the video download when no video is known', () => {
     render(<ResultsPanel {...baseProps} phase="done" video={null} />);
 
     expect(screen.queryByRole('button', { name: 'Download video (MP4)' })).not.toBeInTheDocument();
+  });
+
+  it('offers an AI text summary for the searched video', () => {
+    render(<ResultsPanel {...baseProps} phase="done" />);
+    expect(
+      screen.getByRole('button', { name: 'Download summary (PDF)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('omits the text summary when the video has no speech', () => {
+    render(<ResultsPanel {...baseProps} phase="done" noSpeech />);
+    expect(
+      screen.queryByRole('button', { name: 'Download summary (PDF)' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('turns summary generation into a cancel control and re-arms on cancel', async () => {
+    const user = userEvent.setup();
+    const notes = holdNotes();
+    render(<ResultsPanel {...baseProps} phase="done" />);
+
+    await user.click(screen.getByRole('button', { name: 'Download summary (PDF)' }));
+
+    expect(saveNotesMock).toHaveBeenCalledWith(
+      'abcdef12345',
+      expect.any(AbortSignal),
+      false,
+    );
+    const pending = screen.getByRole('button', { name: 'Cancel summary' });
+    expect(pending).toHaveAttribute('aria-busy', 'true');
+    expect(pending.querySelector('.animate-spin')).not.toBeNull();
+    expect(
+      screen.getByText(/AI is reading the transcript and writing your summary/),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel summary' }));
+
+    expect(notes.aborted()).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Download summary (PDF)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('re-arms the summary download after the PDF is saved', async () => {
+    const user = userEvent.setup();
+    const notes = holdNotes();
+    render(<ResultsPanel {...baseProps} phase="done" />);
+
+    await user.click(screen.getByRole('button', { name: 'Download summary (PDF)' }));
+    await act(async () => notes.finish());
+
+    expect(
+      screen.getByRole('button', { name: 'Download summary (PDF)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a safe error when notes generation fails', async () => {
+    const user = userEvent.setup();
+    const notes = holdNotes();
+    render(<ResultsPanel {...baseProps} phase="done" />);
+
+    await user.click(screen.getByRole('button', { name: 'Download summary (PDF)' }));
+    await act(async () => notes.fail());
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not prepare the summary. Please try again.',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Download summary (PDF)' }),
+    ).toBeInTheDocument();
   });
 
   it('asks where the download should start and end before fetching', async () => {

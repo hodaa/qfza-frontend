@@ -1,9 +1,10 @@
 import { StrictMode, createRef } from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VideoPlayer } from '../components/VideoPlayer';
 import type { VideoPlayerHandle } from '../hooks/useYouTubePlayer';
 import { setLanguage } from '../i18n';
+import { buildDrivePreviewUrl, buildDriveStreamUrl } from '../utils/videoSources';
 
 interface Instance {
   options: YTPlayerOptions;
@@ -11,6 +12,7 @@ interface Instance {
   iframe: HTMLIFrameElement;
 }
 let instances: Instance[];
+const DRIVE_ID = '1DOoJhC6NHpLSu2nAvaWy3HukVimEyyhE';
 const construct = vi.fn(function (element: HTMLElement, options: YTPlayerOptions): YTPlayer {
   const iframe = document.createElement('iframe');
   element.replaceWith(iframe);
@@ -28,14 +30,27 @@ function ready(index = 0) {
   act(() => options.events?.onReady?.({ target: player }));
 }
 
+function seekableMedia(): HTMLVideoElement {
+  const media = screen.getByTitle('Video preview') as HTMLVideoElement;
+  Object.defineProperty(media, 'currentTime', {
+    configurable: true,
+    writable: true,
+    value: 0,
+  });
+  return media;
+}
+
 beforeEach(() => {
   instances = [];
   construct.mockClear();
   document.getElementById('youtube-iframe-api')?.remove();
   vi.stubGlobal('YT', { Player: construct });
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.getElementById('youtube-iframe-api')?.remove();
 });
@@ -218,28 +233,130 @@ describe('VideoPlayer', () => {
     expect(construct).not.toHaveBeenCalled();
   });
 
-  it('embeds a Drive file through its preview iframe instead of the YouTube player', () => {
-    const driveId = '1DOoJhC6NHpLSu2nAvaWy3HukVimEyyhE';
-    render(<VideoPlayer video={{ source: 'drive', id: driveId }} />);
-    expect(screen.getByTitle('Video preview')).toHaveAttribute(
-      'src',
-      `https://drive.google.com/file/d/${driveId}/preview`,
-    );
+  it('plays a Drive file through its media URL instead of the preview iframe', () => {
+    render(<VideoPlayer video={{ source: 'drive', id: DRIVE_ID }} />);
+    const media = screen.getByTitle('Video preview');
+    expect(media.tagName).toBe('VIDEO');
+    expect(media).toHaveAttribute('src', buildDriveStreamUrl(DRIVE_ID));
+    expect(screen.getByText('Loading video preview…')).toBeInTheDocument();
     // The YouTube API must not be touched for a Drive video.
     expect(construct).not.toHaveBeenCalled();
     expect(document.getElementById('youtube-iframe-api')).toBeNull();
   });
 
-  it('swaps a Drive preview for the YouTube player when a different video is loaded', () => {
-    const driveId = '1DOoJhC6NHpLSu2nAvaWy3HukVimEyyhE';
-    const { rerender } = render(<VideoPlayer video={{ source: 'drive', id: driveId }} />);
+  it('queues the latest Drive seek until metadata, then reports only after playback', () => {
+    const ref = createRef<VideoPlayerHandle>();
+    const onPlaybackChange = vi.fn();
+    render(
+      <VideoPlayer
+        ref={ref}
+        video={{ source: 'drive', id: DRIVE_ID }}
+        onPlaybackChange={onPlaybackChange}
+      />,
+    );
+    const media = seekableMedia();
+    act(() => {
+      ref.current?.seekTo(5);
+      ref.current?.seekTo(75);
+    });
+    expect(media.currentTime).toBe(0);
+    expect(
+      screen.getByText('Loading video — we’ll jump to 01:15 when it’s ready.'),
+    ).toBeInTheDocument();
+    fireEvent.loadedMetadata(media);
+    expect(media.currentTime).toBe(75);
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalledOnce();
+    expect(onPlaybackChange).not.toHaveBeenCalledWith(75);
+    fireEvent.playing(media);
+    expect(onPlaybackChange).toHaveBeenLastCalledWith(75);
+    fireEvent.pause(media);
+    expect(onPlaybackChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it('parks a Drive player on a shared moment without autoplaying', () => {
+    const ref = createRef<VideoPlayerHandle>();
+    const onPlaybackChange = vi.fn();
+    render(
+      <VideoPlayer
+        ref={ref}
+        video={{ source: 'drive', id: DRIVE_ID }}
+        onPlaybackChange={onPlaybackChange}
+      />,
+    );
+    const media = seekableMedia();
+    act(() => ref.current?.seekTo(754, { autoplay: false }));
+    fireEvent.loadedMetadata(media);
+    expect(media.currentTime).toBe(754);
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+    expect(onPlaybackChange).toHaveBeenLastCalledWith(754);
+  });
+
+  it('explains blocked Drive autoplay without claiming the moment is playing', async () => {
+    vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(
+      new DOMException('blocked', 'NotAllowedError'),
+    );
+    const ref = createRef<VideoPlayerHandle>();
+    const onPlaybackChange = vi.fn();
+    render(
+      <VideoPlayer
+        ref={ref}
+        video={{ source: 'drive', id: DRIVE_ID }}
+        onPlaybackChange={onPlaybackChange}
+      />,
+    );
+    const media = seekableMedia();
+    act(() => ref.current?.seekTo(65));
+    await act(async () => {
+      fireEvent.loadedMetadata(media);
+    });
+    expect(await screen.findByText(/Playback didn’t start/)).toBeInTheDocument();
+    expect(onPlaybackChange).not.toHaveBeenCalledWith(65);
+  });
+
+  it('falls back to the Drive preview iframe when the file cannot be played', () => {
+    render(<VideoPlayer video={{ source: 'drive', id: DRIVE_ID }} />);
+    fireEvent.error(screen.getByTitle('Video preview'));
+    const frame = screen.getByTitle('Video preview');
+    expect(frame.tagName).toBe('IFRAME');
+    expect(frame).toHaveAttribute('src', buildDrivePreviewUrl(DRIVE_ID));
+    expect(screen.getByText(/Using Drive preview/)).toBeInTheDocument();
+  });
+
+  it('ignores seeks once the Drive preview fallback is active', () => {
+    const ref = createRef<VideoPlayerHandle>();
+    const onPlaybackChange = vi.fn();
+    render(
+      <VideoPlayer
+        ref={ref}
+        video={{ source: 'drive', id: DRIVE_ID }}
+        onPlaybackChange={onPlaybackChange}
+      />,
+    );
+    fireEvent.error(screen.getByTitle('Video preview'));
+    act(() => ref.current?.seekTo(75));
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    expect(screen.queryByText(/we’ll jump to/)).not.toBeInTheDocument();
+    expect(onPlaybackChange).not.toHaveBeenCalledWith(75);
+  });
+
+  it('swaps a Drive video for the YouTube player when a different video is loaded', () => {
+    const { rerender } = render(<VideoPlayer video={{ source: 'drive', id: DRIVE_ID }} />);
     expect(screen.getByTitle('Video preview')).toHaveAttribute(
       'src',
-      `https://drive.google.com/file/d/${driveId}/preview`,
+      buildDriveStreamUrl(DRIVE_ID),
     );
     rerender(<VideoPlayer video={{ source: 'youtube', id: 'abcdef12345' }} />);
     expect(screen.getByText('Loading video preview…')).toBeInTheDocument();
     expect(screen.queryByTitle('Video preview')).not.toBeInTheDocument();
+  });
+
+  it('localizes the Drive preview fallback in Arabic', async () => {
+    await act(async () => setLanguage('ar'));
+    render(<VideoPlayer video={{ source: 'drive', id: DRIVE_ID }} />);
+    fireEvent.error(screen.getByTitle('معاينة الفيديو'));
+    expect(screen.getByText(/يتم التشغيل عبر معاينة جوجل درايف/)).toBeInTheDocument();
+    await act(async () => setLanguage('en'));
   });
 
   it('localizes loading, error and fallback feedback in Arabic', async () => {
