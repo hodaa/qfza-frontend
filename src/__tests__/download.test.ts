@@ -3,11 +3,20 @@ import {
   consumeVideoDownload,
   createVideoDownload,
   createVideoNotes,
+  createVideoSummary,
   fetchVideoDownloadStatus,
   fetchVideoNotesStatus,
+  fetchVideoSummaryStatus,
 } from '../api/client';
-import type { VideoDownloadStatus, VideoNotesStatus } from '../types';
-import { downloadNameFor, notesNameFor, saveDownload, saveNotes } from '../utils/download';
+import type { VideoDownloadStatus, VideoNotesStatus, VideoSummaryStatus } from '../types';
+import {
+  downloadNameFor,
+  notesNameFor,
+  saveDownload,
+  saveNotes,
+  saveSummaryVideo,
+  summaryVideoNameFor,
+} from '../utils/download';
 
 vi.mock('../api/client', () => ({
   createVideoDownload: vi.fn(),
@@ -15,6 +24,8 @@ vi.mock('../api/client', () => ({
   consumeVideoDownload: vi.fn(),
   createVideoNotes: vi.fn(),
   fetchVideoNotesStatus: vi.fn(),
+  createVideoSummary: vi.fn(),
+  fetchVideoSummaryStatus: vi.fn(),
 }));
 
 const VIDEO_URL = 'http://api.test/api/videos/abc123/video.mp4';
@@ -25,6 +36,8 @@ const statusMock = vi.mocked(fetchVideoDownloadStatus);
 const consumeMock = vi.mocked(consumeVideoDownload);
 const createNotesMock = vi.mocked(createVideoNotes);
 const notesStatusMock = vi.mocked(fetchVideoNotesStatus);
+const createSummaryMock = vi.mocked(createVideoSummary);
+const summaryStatusMock = vi.mocked(fetchVideoSummaryStatus);
 
 function downloadStatus(overrides: Partial<VideoDownloadStatus> = {}): VideoDownloadStatus {
   return {
@@ -271,6 +284,79 @@ describe('saveNotes', () => {
 
     vi.useFakeTimers();
     const pending = saveNotes('abc123', controller.signal);
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    await expect(pending).rejects.toBeInstanceOf(DOMException);
+    expect(clicked).toHaveLength(0);
+  });
+});
+
+function summaryStatus(overrides: Partial<VideoSummaryStatus> = {}): VideoSummaryStatus {
+  return {
+    id: 's-1',
+    status: 'ready',
+    url: 'https://blob.test/summary.mp4',
+    error: null,
+    filename: 'summary-abc123.mp4',
+    ...overrides,
+  };
+}
+
+describe('summaryVideoNameFor', () => {
+  it('names the MP4 after its video id', () => {
+    expect(summaryVideoNameFor('abc123')).toBe('summary-abc123.mp4');
+  });
+
+  it('sanitizes unexpected characters in the id', () => {
+    expect(summaryVideoNameFor('a/b c')).toBe('summary-abc.mp4');
+  });
+});
+
+describe('saveSummaryVideo', () => {
+  beforeEach(() => {
+    createSummaryMock.mockReset();
+    summaryStatusMock.mockReset();
+    createSummaryMock.mockResolvedValue({ id: 's-1', status: 'pending' });
+    summaryStatusMock.mockResolvedValue(summaryStatus());
+  });
+
+  it('queues, polls, and saves the rendered MP4', async () => {
+    summaryStatusMock
+      .mockResolvedValueOnce(summaryStatus({ status: 'processing', url: null }))
+      .mockResolvedValueOnce(summaryStatus());
+    const fetchMock = stubBlobFetch();
+    const { clicked } = spyClicks();
+
+    vi.useFakeTimers();
+    const pending = saveSummaryVideo('abc123');
+    await vi.advanceTimersByTimeAsync(5000);
+    await pending;
+
+    expect(createSummaryMock).toHaveBeenCalledWith('abc123', undefined, false);
+    expect(fetchMock).toHaveBeenCalledWith('https://blob.test/summary.mp4', {
+      signal: undefined,
+    });
+    expect(clicked[0]?.download).toBe('summary-abc123.mp4');
+    expect(consumeMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects with the server message when rendering failed', async () => {
+    summaryStatusMock.mockResolvedValue(
+      summaryStatus({ status: 'failed', url: null, error: 'Summary render failed' }),
+    );
+    const { clicked } = spyClicks();
+
+    await expect(saveSummaryVideo('abc123')).rejects.toThrow('Summary render failed');
+    expect(clicked).toHaveLength(0);
+  });
+
+  it('rejects and never clicks when the wait is aborted', async () => {
+    summaryStatusMock.mockResolvedValue(summaryStatus({ status: 'processing', url: null }));
+    const { clicked } = spyClicks();
+    const controller = new AbortController();
+
+    vi.useFakeTimers();
+    const pending = saveSummaryVideo('abc123', controller.signal);
     await vi.advanceTimersByTimeAsync(0);
     controller.abort();
     await expect(pending).rejects.toBeInstanceOf(DOMException);

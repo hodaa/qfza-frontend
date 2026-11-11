@@ -19,6 +19,7 @@ vi.mock('../utils/download', () => ({
   downloadNameFor: vi.fn(() => 'video.mp4'),
   saveDownload: vi.fn(),
   saveNotes: vi.fn(),
+  saveSummaryVideo: vi.fn(),
 }));
 
 const formatsMock = vi.mocked(fetchVideoFormats);
@@ -204,6 +205,13 @@ describe('ResultsPanel', () => {
     expect(
       screen.getByRole('button', { name: 'Download summary (PDF)' }),
     ).toBeInTheDocument();
+  });
+
+  it('hides the recap-video action for now', () => {
+    render(<ResultsPanel {...baseProps} phase="done" />);
+    expect(
+      screen.queryByRole('button', { name: 'Download recap video (MP4)' }),
+    ).not.toBeInTheDocument();
   });
 
   it('omits the text summary when the video has no speech', () => {

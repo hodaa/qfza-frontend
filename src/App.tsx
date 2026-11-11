@@ -33,6 +33,7 @@ import {
   identifyVideoId,
   inspectVideoUrl,
   parseShareUrl,
+  readSharedVideoUrl,
 } from './utils/videoSources';
 import type { DeepLink, VideoRef } from './utils/videoSources';
 import { clearResultsCache, getCachedResults, setCachedResults } from './utils/resultsCache';
@@ -98,10 +99,14 @@ export default function App() {
   const [job, setJob] = useState<ActiveJob | null>(null);
   const [query, setQuery] = useState<Query>(() => {
     const link = readSharedLink();
-    return link ? { url: buildWatchUrl(link.video, 0), keyword: '' } : { url: '', keyword: '' };
+    return link
+      ? { url: buildWatchUrl(link.video, 0), keyword: '' }
+      : { url: readSharedVideoUrl(window.location.search), keyword: '' };
   });
   const [resolved, setResolved] = useState<ResolvedVideo | null>(null);
-  const [loadingVideo, setLoadingVideo] = useState(() => readSharedLink() !== null);
+  const [loadingVideo, setLoadingVideo] = useState(
+    () => readSharedLink() !== null || readSharedVideoUrl(window.location.search) !== '',
+  );
   const [loadError, setLoadError] = useState('');
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [transcriptReady, setTranscriptReady] = useState(false);
@@ -122,6 +127,22 @@ export default function App() {
     },
     [],
   );
+
+  // Web Share Target data arrives in the query string. Once copied into React
+  // state, remove it from the address bar so shared text is not kept in history.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('url') && !params.has('text') && !params.has('title')) return;
+    params.delete('url');
+    params.delete('text');
+    params.delete('title');
+    const search = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+    );
+  }, []);
 
   useEffect(() => {
     if (phase === 'idle' || isReadingHelp()) return;

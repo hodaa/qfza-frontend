@@ -191,6 +191,8 @@ describe('blog page output', () => {
     const posts = await all();
     const valid = new Set<string>(['/']);
     for (const post of posts) valid.add(post.url);
+    const { loadAllPages } = await import('../../scripts/lib/legal.mjs');
+    for (const page of await loadAllPages()) valid.add(page.url);
 
     for (const post of posts) {
       const html = renderPost(post, { siteUrl, css: '', posts });

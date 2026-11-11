@@ -10,6 +10,7 @@ import {
   inspectVideoUrl,
   isGoogleDriveId,
   parseShareUrl,
+  readSharedVideoUrl,
 } from '../utils/videoSources';
 import type { VideoRef } from '../utils/videoSources';
 
@@ -82,6 +83,26 @@ describe('inspectVideoUrl', () => {
     'https://www.youtube.com/watch?v=too-short',
   ])('rejects malformed or non-HTTP(S) links before any source claims them: %s', (url) => {
     expect(inspectVideoUrl(url)).toEqual({ video: null, issue: 'invalid' });
+  });
+});
+
+describe('readSharedVideoUrl', () => {
+  it('reads a URL shared through the Web Share Target URL field', () => {
+    expect(readSharedVideoUrl(`?url=${encodeURIComponent('https://youtu.be/abcdef12345')}`)).toBe(
+      'https://youtu.be/abcdef12345',
+    );
+  });
+
+  it('extracts a supported video URL from shared text', () => {
+    const sharedText = 'Watch this video: https://www.youtube.com/watch?v=abcdef12345.';
+    expect(readSharedVideoUrl(`?text=${encodeURIComponent(sharedText)}`)).toBe(
+      'https://www.youtube.com/watch?v=abcdef12345',
+    );
+  });
+
+  it('ignores unsupported or malformed share payloads', () => {
+    expect(readSharedVideoUrl('?url=https%3A%2F%2Fvimeo.com%2F123')).toBe('');
+    expect(readSharedVideoUrl('?text=not-a-video-link')).toBe('');
   });
 });
 

@@ -174,6 +174,18 @@ describe('VideoPlayer', () => {
     expect(screen.getByText('Video preview unavailable')).toBeInTheDocument();
   });
 
+  it.each([101, 150])('explains that embedding is disabled for YouTube error %s', async (code) => {
+    render(<VideoPlayer video={{ source: 'youtube', id: 'abcdef12345' }} />);
+    await waitFor(() => expect(construct).toHaveBeenCalledOnce());
+    act(() => instances[0].options.events?.onError?.({ data: code }));
+
+    expect(
+      screen.getByText(
+        'This video can’t be played outside YouTube because its owner disabled embedding. Open it on YouTube to watch.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('explains blocked autoplay without claiming the requested match is playing', async () => {
     const ref = createRef<VideoPlayerHandle>();
     const onPlaybackChange = vi.fn();
@@ -366,5 +378,19 @@ describe('VideoPlayer', () => {
     await waitFor(() => expect(construct).toHaveBeenCalledOnce());
     act(() => instances[0].options.events?.onError?.({ data: 100 }));
     expect(screen.getByText('معاينة الفيديو غير متاحة')).toBeInTheDocument();
+  });
+
+  it('localizes YouTube embedding restrictions in Arabic', async () => {
+    await act(async () => setLanguage('ar'));
+    render(<VideoPlayer video={{ source: 'youtube', id: 'abcdef12345' }} />);
+    await waitFor(() => expect(construct).toHaveBeenCalledOnce());
+    act(() => instances[0].options.events?.onError?.({ data: 150 }));
+
+    expect(
+      screen.getByText(
+        'لا يمكن تشغيل هذا الفيديو خارج يوتيوب لأن مالكه عطّل تضمينه في المواقع الأخرى. افتحه على يوتيوب لمشاهدته.',
+      ),
+    ).toBeInTheDocument();
+    await act(async () => setLanguage('en'));
   });
 });

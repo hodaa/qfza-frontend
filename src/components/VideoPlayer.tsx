@@ -22,7 +22,7 @@ const PlayerInstance = forwardRef<VideoPlayerHandle, Props>(function PlayerInsta
   const { t } = useTranslation();
   const [containerRef, handle, state] = useYouTubePlayer(video.id, onPlaybackChange);
   useImperativeHandle(ref, () => handle, [handle]);
-  const { status, requestedTimestamp, playbackBlocked } = state;
+  const { status, requestedTimestamp, playbackBlocked, embedRestricted } = state;
   const timestamp = requestedTimestamp === null ? null : formatYouTubeTime(requestedTimestamp);
   const message =
     status === 'loading'
@@ -30,7 +30,7 @@ const PlayerInstance = forwardRef<VideoPlayerHandle, Props>(function PlayerInsta
         ? t('player.loadingMoment', { timestamp })
         : t('player.loading')
       : status === 'unavailable'
-        ? t('player.unavailableHint')
+        ? t(embedRestricted ? 'player.embedRestrictedHint' : 'player.unavailableHint')
         : playbackBlocked
           ? t('player.playbackBlocked')
           : '';

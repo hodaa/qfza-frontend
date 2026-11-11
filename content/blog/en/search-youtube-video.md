@@ -11,6 +11,8 @@ Searching for the video's name or title is easy. But what if you only remember p
 
 This is where **searching inside YouTube videos** comes in.
 
+Qfza is a [video search tool for YouTube](/search-inside-videos/) that finds matching words in a video's transcript and links them to their timestamps.
+
 ## How do you search inside a YouTube video?
 
 Usually, if you want to find something inside a long video, you have to watch the video or drag the timeline around until you find the part you are looking for.

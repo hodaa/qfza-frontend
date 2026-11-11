@@ -2,8 +2,10 @@ import {
   consumeVideoDownload,
   createVideoDownload,
   createVideoNotes,
+  createVideoSummary,
   fetchVideoDownloadStatus,
   fetchVideoNotesStatus,
+  fetchVideoSummaryStatus,
 } from '../api/client';
 import { sleep } from './async';
 
@@ -15,6 +17,9 @@ const POLL_INTERVAL_MS = 2000;
 
 // Notes read the whole transcript, so they take longer than a download.
 const NOTES_POLL_INTERVAL_MS = 3000;
+
+// A summary downloads the source and renders clips, so it is slower still.
+const SUMMARY_POLL_INTERVAL_MS = 5000;
 
 // The download request's path: /api/videos/<id>/video.mp4 with an optional range.
 const VIDEO_PATH = /\/videos\/([^/]+)\/video\.mp4$/;
@@ -115,6 +120,54 @@ async function waitForNotesReady(
 export function notesNameFor(youtubeId: string): string {
   const safeId = youtubeId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'video';
   return `notes-${safeId}.pdf`;
+}
+
+/**
+ * Generate a highlight video without leaving the page.
+ *
+ * The POST queues the work; the worker scores the transcript, renders the
+ * selected clips, then reports a cached blob URL. Ready summaries are reused
+ * by the server, so a second click saves the same MP4 instead of paying for
+ * another render. With `regenerate`, the cached MP4 is retired and a fresh one
+ * is rendered. Aborting `signal` only stops this wait; the worker keeps the
+ * result for the next click.
+ */
+export async function saveSummaryVideo(
+  youtubeId: string,
+  signal?: AbortSignal,
+  regenerate = false,
+): Promise<void> {
+  const created = await createVideoSummary(youtubeId, signal, regenerate);
+  const ready = await waitForSummaryReady(youtubeId, created.id, signal);
+  const response = await fetch(ready.url, { signal });
+  if (!response.ok) {
+    throw new Error(`Summary video download failed with status ${response.status}`);
+  }
+  saveBlob(await response.blob(), ready.filename ?? summaryVideoNameFor(youtubeId));
+}
+
+/** Poll until the worker reported the highlight video ready, or it failed. */
+async function waitForSummaryReady(
+  youtubeId: string,
+  summaryId: string,
+  signal?: AbortSignal,
+): Promise<{ url: string; filename: string | null }> {
+  for (;;) {
+    const status = await fetchVideoSummaryStatus(youtubeId, summaryId, signal);
+    if (status.status === 'ready' && status.url) {
+      return { url: status.url, filename: status.filename };
+    }
+    if (status.status !== 'pending' && status.status !== 'processing') {
+      throw new Error(status.error ?? 'Summary video failed');
+    }
+    await sleep(SUMMARY_POLL_INTERVAL_MS, signal);
+  }
+}
+
+/** Rebuild the file name the server would use for a highlight video. */
+export function summaryVideoNameFor(youtubeId: string): string {
+  const safeId = youtubeId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'video';
+  return `summary-${safeId}.mp4`;
 }
 
 /** Parse the video, section, and quality out of a download URL. */

@@ -20,6 +20,7 @@ interface PlayerState {
   status: 'loading' | 'ready' | 'unavailable';
   requestedTimestamp: number | null;
   playbackBlocked: boolean;
+  embedRestricted: boolean;
 }
 
 const API_SCRIPT_ID = 'youtube-iframe-api';
@@ -86,6 +87,7 @@ export function useYouTubePlayer(
     status: 'loading',
     requestedTimestamp: null,
     playbackBlocked: false,
+    embedRestricted: false,
   });
 
   useEffect(() => {
@@ -111,12 +113,17 @@ export function useYouTubePlayer(
       player = null;
       container?.replaceChildren();
     };
-    const fail = () => {
+    const fail = (embedRestricted = false) => {
       if (controller.signal.aborted || failed) return;
       failed = true;
       ready = false;
       window.clearTimeout(readyTimer);
-      setState((current) => ({ ...current, status: 'unavailable', playbackBlocked: false }));
+      setState((current) => ({
+        ...current,
+        status: 'unavailable',
+        playbackBlocked: false,
+        embedRestricted,
+      }));
       playbackChangeRef.current?.(null);
       destroy();
     };
@@ -169,7 +176,7 @@ export function useYouTubePlayer(
             setState((current) => ({ ...current, status: 'ready' }));
             playRequestedMoment();
           },
-          onError: fail,
+          onError: ({ data }) => fail(data === 101 || data === 150),
           onStateChange: ({ data }) => {
             if (controller.signal.aborted || failed) return;
             if (data === 1) {
@@ -187,7 +194,7 @@ export function useYouTubePlayer(
         },
       });
     };
-    void initialize().catch(fail);
+    void initialize().catch(() => fail());
 
     return () => {
       controller.abort();

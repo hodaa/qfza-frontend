@@ -114,6 +114,25 @@ export interface VideoNotesStatus extends VideoNotesCreated {
   filename: string | null;
 }
 
+/** Lifecycle states for an AI highlight-video request. */
+type VideoSummaryState = 'pending' | 'processing' | 'ready' | 'failed';
+
+/** Response shape for POST /api/videos/{youtube_id}/summaries. */
+export interface VideoSummaryCreated {
+  id: string;
+  status: VideoSummaryState;
+}
+
+/** Response shape for the highlight-video status route. */
+export interface VideoSummaryStatus extends VideoSummaryCreated {
+  /** Blob URL of the rendered MP4; set only while ready. */
+  url: string | null;
+  /** User-safe failure message when failed. */
+  error: string | null;
+  /** Filename the client should save the MP4 under. */
+  filename: string | null;
+}
+
 /* ── accounts and private search history ── */
 
 /** The signed-in user. Never carries a password hash. */

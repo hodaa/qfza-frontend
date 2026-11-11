@@ -9,6 +9,8 @@ import type {
   VideoNotesStatus,
   VideoFormatsResponse,
   VideoSearchResponse,
+  VideoSummaryCreated,
+  VideoSummaryStatus,
 } from '../types';
 
 /** Error whose message can be shown to the user. */
@@ -263,6 +265,31 @@ export function fetchVideoNotesStatus(
 ): Promise<VideoNotesStatus> {
   return request<VideoNotesStatus>(
     `/api/videos/${encodeURIComponent(youtubeId)}/notes/${encodeURIComponent(noteId)}`,
+    { signal },
+  );
+}
+
+/** Queue an AI highlight video; the worker renders the MP4 and reports a blob URL. */
+export function createVideoSummary(
+  youtubeId: string,
+  signal?: AbortSignal,
+  regenerate = false,
+): Promise<VideoSummaryCreated> {
+  const query = regenerate ? '?regenerate=true' : '';
+  return request<VideoSummaryCreated>(
+    `/api/videos/${encodeURIComponent(youtubeId)}/summaries${query}`,
+    { method: 'POST', signal },
+  );
+}
+
+/** Fetch a highlight-video request's state, its blob URL once ready, and filename. */
+export function fetchVideoSummaryStatus(
+  youtubeId: string,
+  summaryId: string,
+  signal?: AbortSignal,
+): Promise<VideoSummaryStatus> {
+  return request<VideoSummaryStatus>(
+    `/api/videos/${encodeURIComponent(youtubeId)}/summaries/${encodeURIComponent(summaryId)}`,
     { signal },
   );
 }

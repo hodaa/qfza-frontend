@@ -37,6 +37,7 @@ export const SHELL = `
     <p><a href="#main-content">Start searching on Qfza</a></p>
       <nav aria-label="Site pages">
         <a href="/blog/" hreflang="en" lang="en">Blog</a>
+        <a href="/search-inside-videos/" hreflang="en" lang="en">Search inside videos</a>
         <a href="/faq/" hreflang="en" lang="en">FAQ</a>
         <a href="/about/" hreflang="en" lang="en">About</a>
         <a href="/contact/" hreflang="en" lang="en">Contact</a>
@@ -63,6 +64,7 @@ export const SHELL = `
     <p><a href="#main-content">ابدأ البحث على قفزة</a></p>
       <nav aria-label="صفحات الموقع">
         <a href="/ar/blog/" hreflang="ar" lang="ar">المدونة</a>
+        <a href="/ar/search-inside-videos/" hreflang="ar" lang="ar">البحث داخل الفيديوهات</a>
         <a href="/ar/faq/" hreflang="ar" lang="ar">الأسئلة الشائعة</a>
         <a href="/ar/about/" hreflang="ar" lang="ar">عن قفزة</a>
         <a href="/ar/contact/" hreflang="ar" lang="ar">تواصل معنا</a>

@@ -4,7 +4,8 @@ import { videoDownloadUrl } from '../api/client';
 import { usePreparingAction } from '../hooks/usePreparingAction';
 import { usePreparingDownload } from '../hooks/usePreparingDownload';
 import { usePreparingNotes } from '../hooks/usePreparingNotes';
-import { IconBolt, IconFileText, IconVideo } from './icons';
+import { usePreparingSummaryVideo } from '../hooks/usePreparingSummaryVideo';
+import { IconBolt, IconFileText, IconPlay, IconVideo } from './icons';
 import { VideoDownloadDialog } from './VideoDownloadDialog';
 
 interface Props {
@@ -26,6 +27,8 @@ const BUTTON_PENDING = `${BUTTON_BASE} text-danger`;
 
 const SPINNER =
   'h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700';
+
+const SUMMARY_VIDEO_ENABLED = false;
 
 /** Wrapping download actions and a status row below the headline. */
 export function ResultsToolbar({
@@ -51,6 +54,14 @@ export function ResultsToolbar({
   } = usePreparingAction(videoId ? `transcript:${videoId}` : undefined);
   const { preparingNotes, notesFailed, notesReady, beginNotes, regenerateNotes, cancelNotes } =
     usePreparingNotes(videoId, ensureTranscript);
+  const {
+    preparingSummaryVideo,
+    summaryVideoFailed,
+    summaryVideoReady,
+    beginSummaryVideo,
+    regenerateSummaryVideo,
+    cancelSummaryVideo,
+  } = usePreparingSummaryVideo(videoId, ensureTranscript);
 
   const handleVideoClick = () => {
     // Always the dialog, never a direct download: a click opens the quality
@@ -83,6 +94,14 @@ export function ResultsToolbar({
       return;
     }
     beginNotes();
+  };
+
+  const handleSummaryVideoClick = () => {
+    if (preparingSummaryVideo) {
+      cancelSummaryVideo();
+      return;
+    }
+    beginSummaryVideo();
   };
 
   const handleDownloadSection = (
@@ -151,6 +170,23 @@ export function ResultsToolbar({
             {preparingNotes ? t('results.cancelNotes') : t('results.generateNotes')}
           </button>
         ) : null}
+        {videoId && allowNotes && SUMMARY_VIDEO_ENABLED ? (
+          <button
+            type="button"
+            className={preparingSummaryVideo ? BUTTON_PENDING : BUTTON}
+            aria-busy={preparingSummaryVideo || undefined}
+            onClick={handleSummaryVideoClick}
+          >
+      {SUMMARY_VIDEO_ENABLED && preparingSummaryVideo ? (
+              <span aria-hidden="true" className={SPINNER} />
+            ) : (
+              <IconPlay size={16} />
+            )}
+            {preparingSummaryVideo
+              ? t('results.cancelSummaryVideo')
+              : t('results.generateSummaryVideo')}
+          </button>
+        ) : null}
       </div>
       {preparingVideo ? (
         <p role="status" className="text-xs font-medium text-slate-500">
@@ -186,6 +222,30 @@ export function ResultsToolbar({
             onClick={regenerateNotes}
           >
             {t('results.regenerateNotes')}
+          </button>
+        </p>
+      ) : null}
+      {preparingSummaryVideo ? (
+        <p role="status" className="text-xs font-medium text-slate-500">
+          {transcriptReady
+            ? t('results.preparingSummaryVideoHint')
+            : t('results.preparingTranscriptHint')}
+        </p>
+      ) : null}
+      {SUMMARY_VIDEO_ENABLED && summaryVideoFailed && !preparingSummaryVideo ? (
+        <p role="alert" className="text-xs font-medium text-danger">
+          {t('results.summaryVideoFailed')}
+        </p>
+      ) : null}
+      {SUMMARY_VIDEO_ENABLED && summaryVideoReady && !preparingSummaryVideo ? (
+        <p role="status" className="text-xs font-medium text-success">
+          {t('results.summaryVideoReady')}{' '}
+          <button
+            type="button"
+            className="font-semibold underline underline-offset-2 hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-action"
+            onClick={regenerateSummaryVideo}
+          >
+            {t('results.regenerateSummaryVideo')}
           </button>
         </p>
       ) : null}

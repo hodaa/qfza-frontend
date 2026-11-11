@@ -153,6 +153,32 @@ export function inspectVideoUrl(url: string): VideoUrlInfo {
 }
 
 /**
+ * Read a video URL sent through the Web Share Target API. Some share sheets put
+ * the link in `url`; others include it in `text` alongside a title or message.
+ */
+export function readSharedVideoUrl(search: string): string {
+  try {
+    const params = new URLSearchParams(search);
+    const candidates = [params.get('url'), params.get('text')];
+
+    for (const value of candidates) {
+      const text = value?.trim();
+      if (!text) continue;
+      if (inspectVideoUrl(text).video) return text;
+
+      const urls = text.match(/https?:\/\/[^\s<>"'`]+/g) ?? [];
+      for (const url of urls) {
+        const candidate = url.replace(/[),.;!?\]}]+$/, '');
+        if (inspectVideoUrl(candidate).video) return candidate;
+      }
+    }
+  } catch {
+    // Ignore malformed share payloads and leave the ordinary landing form empty.
+  }
+  return '';
+}
+
+/**
  * Name the source a bare video id belongs to.
  *
  * Ids recorded before Drive existed are all YouTube's, and Drive's own are

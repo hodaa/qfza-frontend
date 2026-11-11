@@ -79,6 +79,16 @@ describe('App', () => {
     expect(mockSubmit).toHaveBeenCalledWith(driveUrl, 'hello world', expect.any(AbortSignal));
   });
 
+  it('opens a video shared from YouTube with its URL filled in', async () => {
+    window.history.replaceState(null, '', `/?url=${encodeURIComponent(URL)}`);
+    render(<App />);
+
+    expect(await screen.findByLabelText('Search this video')).toBeInTheDocument();
+    expect(screen.getByLabelText('Video URL')).toHaveValue(URL);
+    expect(mockResolve).toHaveBeenCalledWith(URL, expect.any(AbortSignal));
+    await waitFor(() => expect(window.location.search).toBe(''));
+  });
+
   it('offers Clear keyword when there are no matches', async () => {
     mockSubmit.mockResolvedValue({ status: 'found', results: [] });
     await fillAndSubmit();
