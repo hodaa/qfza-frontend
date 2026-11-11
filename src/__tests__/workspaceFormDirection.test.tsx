@@ -16,7 +16,7 @@ describe('workspace form direction', () => {
     await act(async () => setLanguage('ar'));
     render(<VideoUrlForm onSubmit={onSubmit} />);
 
-    const input = screen.getByPlaceholderText('الصق رابط يوتيوب أو جوجل درايف');
+    const input = screen.getByPlaceholderText('الصق رابط الفيديو');
     expect(input).toHaveAttribute('dir', 'rtl');
     expect(input.className).toContain('placeholder:text-right');
   });
@@ -54,7 +54,7 @@ describe('workspace form direction', () => {
       </>,
     );
 
-    const url = screen.getByPlaceholderText('Paste a YouTube or Google Drive link');
+    const url = screen.getByPlaceholderText('Paste a video link');
     const keyword = screen.getByPlaceholderText('e.g. supply and demand');
     expect(url).toHaveAttribute('dir', 'ltr');
     expect(url.className).toContain('placeholder:text-left');
@@ -64,11 +64,11 @@ describe('workspace form direction', () => {
 
   it('follows a live switch to Arabic', async () => {
     render(<VideoUrlForm onSubmit={onSubmit} />);
-    const input = screen.getByPlaceholderText('Paste a YouTube or Google Drive link');
+    const input = screen.getByPlaceholderText('Paste a video link');
 
     await act(async () => setLanguage('ar'));
 
     expect(input).toHaveAttribute('dir', 'rtl');
-    expect(input).toHaveAttribute('placeholder', 'الصق رابط يوتيوب أو جوجل درايف');
+    expect(input).toHaveAttribute('placeholder', 'الصق رابط الفيديو');
   });
 });

@@ -180,7 +180,7 @@
     "momentListLabel": "The saved moment"
   },
   "workspace": {
-    "urlPlaceholder": "Paste a YouTube or Google Drive link",
+    "urlPlaceholder": "Paste a video link",
     "load": "Jump to video",
     "loading": "Jumping to video…",
     "searchLabel": "Search this video",

@@ -187,7 +187,7 @@
     "momentListLabel": "اللحظة المحفوظة"
   },
   "workspace": {
-    "urlPlaceholder": "الصق رابط يوتيوب أو جوجل درايف",
+    "urlPlaceholder": "الصق رابط الفيديو",
     "load": "اقفز للفيديو",
     "loading": "جارٍ الانتقال إلى الفيديو…",
     "searchLabel": "ابحث في هذا الفيديو",
