@@ -7,19 +7,21 @@ describe('LanguageToggle', () => {
   it('starts in English and shows the language selector trigger', () => {
     render(<LanguageToggle />);
     expect(screen.getByRole('button', { name: 'Language' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'English' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(document.documentElement.dir).toBe('ltr');
   });
 
-  it('switches to Arabic and back via the dropdown', async () => {
+  it('switches between locales directly from the mobile segment', async () => {
     const user = userEvent.setup();
     render(<LanguageToggle />);
 
-    await user.click(screen.getByRole('button', { name: 'Language' }));
-    await user.click(screen.getByRole('option', { name: 'العربية' }));
+    await user.click(screen.getByRole('button', { name: 'العربية' }));
     expect(document.documentElement.dir).toBe('rtl');
 
-    await user.click(screen.getByRole('button', { name: 'اللغة' }));
-    await user.click(screen.getByRole('option', { name: 'English' }));
+    await user.click(screen.getByRole('button', { name: 'English' }));
     expect(document.documentElement.dir).toBe('ltr');
   });
 

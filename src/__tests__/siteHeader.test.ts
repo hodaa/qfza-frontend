@@ -54,6 +54,9 @@ describe('static site header', () => {
   it('offers a real link to the counterpart page, not a JS dropdown', () => {
     const html = renderHeader('ar', '/ar/privacy/');
     expect(html).toMatch(/class="qlf-pill" href="\/privacy\/" hreflang="en" lang="en"/);
+    expect(html).toContain('class="qlf-language-mobile" role="group" aria-label="اللغة"');
+    expect(html).toContain('aria-current="page">عربي</span>');
+    expect(html).toContain('hreflang="en" lang="en" aria-label="English">EN</a>');
   });
 
   it('renders a sign-in pill, so static pages have an account affordance', () => {
@@ -122,7 +125,9 @@ describe('static header parity with SiteHeader', () => {
     expect(react).toContain('sm:mb-8');
     expect(HEADER_CSS).toMatch(/\.qlf-header\{[^}]*margin-bottom:1\.25rem/);
     expect(HEADER_CSS).toMatch(/\.qlf-header\{display:grid[^}]*margin-bottom:2rem/);
-    expect(HEADER_CSS).toContain('.qlf-header-actions{order:3;flex:none;justify-self:end}');
+    expect(HEADER_CSS).toContain(
+      '.qlf-header-actions{order:3;flex:none;justify-self:end;gap:.75rem}',
+    );
   });
 
   it('uses the app colour tokens, not the hand-picked navy it drifted to', () => {
@@ -140,9 +145,10 @@ describe('static header parity with SiteHeader', () => {
     expect(react).toContain('sm:grid-cols-[1fr_auto_1fr]');
     expect(HEADER_CSS).toContain('.qlf-header-actions');
     const html = renderHeader('en', '/blog/');
-    const track = /<div class="qlf-header-actions">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? '';
+    const track = /<div class="qlf-header-actions">([\s\S]*?)<\/header>/.exec(html)?.[1] ?? '';
     expect(track).toContain('qlf-pill-primary');
     expect(track).toContain('href="/ar/blog/"');
+    expect(track).toContain('class="qlf-language-mobile"');
   });
 });
 

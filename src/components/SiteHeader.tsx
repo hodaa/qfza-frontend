@@ -26,7 +26,7 @@ function Logo({ onActivate }: { onActivate?: () => void }) {
       aria-label={t('nav.home')}
     >
       <img
-        className="h-10 w-auto object-contain sm:h-12"
+        className="h-10 w-auto object-contain max-[360px]:h-9 sm:h-12"
         src={getLanguage() === 'ar' ? '/logo.svg' : '/logo-en.svg?v=icon-left'}
         alt={t('app.logoAlt')}
         width="124"
@@ -39,10 +39,10 @@ function Logo({ onActivate }: { onActivate?: () => void }) {
 /**
  * Site header.
  *
- * Mobile (< sm): logo and language switcher share the first row (the switcher
- * is pushed to the inline end); when the row is too narrow for the account
- * control to sit beside the switcher it wraps onto its own line rather than
- * squeezing the two buttons, and the marketing links take a third row.
+ * Mobile (< sm): the logo, compact language segment, and labeled account
+ * control share the first row where the viewport permits; the marketing links
+ * take a separate row. The language segment keeps both locale choices visible
+ * without taking the width of the full desktop dropdown label.
  * sm and up: a `1fr auto 1fr` grid — logo track, nav track, switcher track.
  * The two outer tracks are equal, so the nav sits dead centre with the same
  * breathing room on both sides. That replaces the old `ms-auto` +
@@ -58,7 +58,7 @@ export const SiteHeader = memo(function SiteHeader({
   const { t } = useTranslation();
 
   return (
-    <header className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-slate-200 pb-3 sm:mb-8 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-y-0 sm:pb-4">
+    <header className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-3 border-b border-slate-200 pb-3 sm:mb-8 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-y-0 sm:pb-4">
       <Logo onActivate={onLogoClick} />
       <nav
         className="order-3 flex w-full items-center justify-center gap-x-8 border-t border-slate-100 pt-3 sm:order-2 sm:w-auto sm:gap-x-6 sm:border-0 sm:pt-0"
@@ -71,7 +71,7 @@ export const SiteHeader = memo(function SiteHeader({
           {t('nav.whyQfza')}
         </a>
       </nav>
-      <div className="order-2 flex flex-1 flex-wrap items-center justify-end gap-3 sm:order-3 sm:flex-none sm:justify-self-end">
+      <div className="order-2 flex flex-1 flex-wrap items-center justify-end gap-2 sm:order-3 sm:flex-none sm:justify-self-end sm:gap-3">
         <LanguageToggle />
         <AccountMenu />
       </div>

@@ -78,9 +78,11 @@ export const AccountMenu = memo(function AccountMenu() {
     return (
       <RouteLink
         to="login"
-        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-primary shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-action"
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-primary shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-action sm:gap-2 sm:px-4 sm:text-sm max-[360px]:px-2"
       >
-        <IconLock size={16} />
+        <span className="max-[360px]:hidden">
+          <IconLock size={16} />
+        </span>
         {t('auth.nav.signIn')}
       </RouteLink>
     );
@@ -121,11 +123,15 @@ export const AccountMenu = memo(function AccountMenu() {
             setOpen(true);
           }
         }}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-primary shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-action"
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-primary shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-action sm:gap-2 sm:px-3 sm:text-sm max-[360px]:px-2"
       >
-        <IconUser size={16} />
-        <span className="hidden max-w-[10rem] truncate sm:inline">{label}</span>
-        <span className="sm:hidden">{t('auth.nav.account')}</span>
+        <span className="max-[360px]:hidden">
+          <IconUser size={16} />
+        </span>
+        <span className="hidden max-w-[10rem] truncate sm:inline max-[360px]:text-xs">
+          {label}
+        </span>
+        <span className="sm:hidden max-[360px]:text-xs">{t('auth.nav.account')}</span>
       </button>
 
       {open ? (
